@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulasi Konservasi Energi Mekanik - Sains Komputasi RPL</title>
+  
+  <!-- Pustaka p5.js via CDN Resmi (Sesuai Modul Bab II Cara 2) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg-page: #0f172a;
+      --card-bg: #ffffff;
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f1f5f9;
+      color: var(--text-main);
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    .container {
+      max-width: 1060px;
+      margin: 0 auto;
+    }
+
+    header {
+      background: #ffffff;
+      padding: 24px 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+      margin-bottom: 20px;
+      border-left: 6px solid var(--primary);
+    }
+
+    .badge-course {
+      display: inline-block;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+
+    header p {
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    .simulation-wrapper {
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07);
+      margin-bottom: 24px;
+      border: 1px solid var(--border-color);
+    }
+
+    #canvas-container {
+      display: flex;
+      justify-content: center;
+      background: #0f172a;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+      border: 1px solid #334155;
+    }
+
+    #control-panel {
+      padding: 10px 0;
+    }
+
+    /* Kartu Penjelasan Teori & Sains Komputasi */
+    .theory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .theory-card {
+      background: #ffffff;
+      border-radius: 10px;
+      padding: 20px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+    }
+
+    .theory-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .formula-box {
+      background: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 6px;
+      border-left: 3px solid #3b82f6;
+      font-family: "Courier New", Courier, monospace;
+      font-size: 13px;
+      margin: 10px 0;
+      color: #1e293b;
+    }
+
+    .theory-card ul {
+      padding-left: 20px;
+      font-size: 13px;
+      color: #475569;
+    }
+
+    .theory-card li {
+      margin-bottom: 6px;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+      padding: 16px 0;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header Informasi Proyek & Mata Kuliah -->
+    <header>
+      <div class="badge-course">Mata Kuliah Sains Komputasi RPL (2026)</div>
+      <h1>Laboratorium Virtual: Konservasi Energi Mekanik</h1>
+      <p>
+        Dosen Pengampu: <b>Prof. Dr. rer. nat. Yudi Rosandi</b> & <b>Dr. Budi Adiperdana</b><br>
+        Implementasi Pemodelan Numerik Waktu Diskrit (Euler-Cromer) & Visualisasi Interaktif Berbasis <code>p5.js</code>
+      </p>
+    </header>
+
+    <!-- Kontainer Kanvas & Kontrol Simulasi -->
+    <div class="simulation-wrapper">
+      <div id="canvas-container">
+        <!-- Kanvas p5.js otomatis disematkan di sini oleh sketch.js -->
+      </div>
+      <div id="control-panel">
+        <!-- Komponen UI interaktif (Select, Slider, Button, Checkbox) disematkan di sini -->
+      </div>
+    </div>
+
+    <!-- Referensi Konsep Teori & Sains Komputasi -->
+    <div class="theory-grid">
+      <div class="theory-card">
+        <h3>🔬 1. Landasan Fisika: Konservasi Energi</h3>
+        <p style="font-size: 13px; color: #475569;">
+          Hukum Kekekalan Energi Mekanik menyatakan bahwa pada sistem terisolasi di mana hanya bekerja gaya-gaya konservatif (seperti gravitasi), total energi mekanik akan bernilai <b>konstan</b>:
+        </p>
+        <div class="formula-box">
+          Em = Ep + Ek = Konstan<br>
+          Ep = m · g · h<br>
+          Ek = ½ · m · v²
+        </div>
+        <ul>
+          <li><b>Titik Puncak:</b> Kecepatan minimum / nol (<i>Ek = 0</i>), seluruh energi berbentuk Potensial (<i>Ep = maks</i>).</li>
+          <li><b>Titik Lembah:</b> Ketinggian minimum (<i>Ep = min</i>), seluruh energi berubah menjadi Kinetik (<i>Ek = maks</i>).</li>
+          <li><b>Gaya Non-Konservatif:</b> Jika gesekan/redaman aktif (μ > 0), sebagian energi mekanik berubah menjadi kalor (<i>W_gesek</i>).</li>
+        </ul>
+      </div>
+
+      <div class="theory-card">
+        <h3>💻 2. Pendekatan Sains Komputasi (Numerik)</h3>
+        <p style="font-size: 13px; color: #475569;">
+          Sesuai silabus Sains Komputasi (3 Pilar Sains: <i>Teori, Simulasi, Eksperimen</i>), sistem kontinu didiskritisasi dengan selang waktu <b>Δt</b> menggunakan algoritma <b>Euler-Cromer</b> (Symplectic):
+        </p>
+        <div class="formula-box">
+          v(t + Δt) = v(t) + a(t) · Δt<br>
+          x(t + Δt) = x(t) + v(t + Δt) · Δt
+        </div>
+        <ul>
+          <li><b>Stabilitas Energi:</b> Berbeda dari Euler Standar yang menyebabkan artificial energy drift, Euler-Cromer memperbarui kecepatan terlebih dahulu sehingga kekekalan energi sangat stabil.</li>
+          <li><b>Multi-Model:</b> Mencakup 3 model fisis: <i>Roller Coaster (Track 2D)</i>, <i>Jatuh Bebas & Pantulan (GLBB 1D)</i>, dan <i>Ayunan Bandul Sederhana</i>.</li>
+        </ul>
+      </div>
+
+      <div class="theory-card">
+        <h3>🎮 3. Panduan Interaksi & Fitur</h3>
+        <ul>
+          <li><b>Klik & Geser Bola (Mouse Drag):</b> Anda dapat menarik bola langsung di layar kanvas untuk menentukan ketinggian awal atau simpangan awal secara bebas!</li>
+          <li><b>Pintasan Keyboard (Shortcuts):</b>
+            <ul>
+              <li><code>[Spasi]</code> : Jalankan / Jeda simulasi</li>
+              <li><code>[R]</code> : Reset simulasi ke kondisi awal</li>
+              <li><code>[S]</code> : Simpan tangkapan layar (PNG)</li>
+            </ul>
+          </li>
+          <li><b>Eksperimen Gravitasi:</b> Ubah slider gravitasi (g) untuk membandingkan gerak di Bumi (9.8), Bulan (1.6), atau Jupiter (24.8).</li>
+          <li><b>Eksperimen Friksi:</b> Setel slider μ = 0.00 untuk melihat garis kurva Em lurus sempurna (Konservasi 100%).</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      Tugas Simulasi Fisika Sains Komputasi &copy; 2026 | Berbasis p5.js & Sains Komputasi RPL
+    </footer>
+  </div>
+
+  <!-- Menghubungkan File Logika Skrip p5.js -->
+  <script src="sketch.js"></script>
+</body>
+</html>
