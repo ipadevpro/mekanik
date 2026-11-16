@@ -4,185 +4,175 @@
  * ============================================================================
  * Mata Kuliah : Sains Komputasi RPL (2026)
  * Dosen       : Prof. Dr. rer. nat. Yudi Rosandi & Dr. Budi Adiperdana
- * Pendekatan  : Eksperimen Teori & Simulasi Komputasi (3 Pilar Sains)
- * Metode      : Integrasi Numerik Waktu Diskrit (Euler-Cromer) & Visualisasi Real-Time
+ * Metode      : Integrasi numerik waktu diskrit (Euler-Cromer)
  * File        : sketch.js
  * ============================================================================
- * Rumus Fisika yang Digunakan:
- * 1. Energi Potensial Gravitasi : Ep = m * g * h
- * 2. Energi Kinetik             : Ek = 0.5 * m * v^2
- * 3. Energi Mekanik Total       : Em = Ep + Ek
- * 4. Hukum Kekekalan Energi     : Em = konstan (jika sistem konservatif / friksi = 0)
- * 5. Disipasi Energi            : E_disip = Em_awal - Em (jika ada redaman/gesekan)
+ * Rumus:
+ * 1. Energi potensial gravitasi : Ep = m * g * h
+ * 2. Energi kinetik             : Ek = 0.5 * m * v^2
+ * 3. Energi mekanik             : Em = Ep + Ek
+ * 4. Kekekalan energi           : Em = konstan (jika mu = 0)
+ * 5. Energi terdisipasi (kalor) : Q  = Em_awal - Em (jika mu > 0)
  * ============================================================================
  */
 
-// Nonaktifkan Friendly Errors untuk performa visual 60 FPS maksimal (sesuai modul/standar p5.js)
 p5.disableFriendlyErrors = true;
 
 // ============================================================================
-// 1. VARIABEL GLOBAL FISIKA & SIMULASI
+// 1. TAMPILAN: PALET & TIPOGRAFI
+// Warna dipakai secara semantik, bukan dekoratif:
+//   biru  = Ep (dan garis ketinggian h)
+//   oranye = Ek (dan vektor kecepatan v)
+//   merah  = Q, energi yang hilang jadi kalor
+//   tinta  = Em, total
 // ============================================================================
-let massa = 2.0;          // Massa benda (kg)
-let g = 9.8;              // Percepatan gravitasi (m/s^2)
-let muGesek = 0.00;       // Koefisien redaman/gesek (0 = Konservatif Murni)
-let dt = 0.02;            // Selang waktu integrasi numerik per frame (detik)
-let skalaMeter = 42;      // Skala visual: 1 meter = 42 piksel
-let yTanah = 460;         // Koordinat piksel permukaan tanah (acuan h = 0)
-let waktuSimulasi = 0.0;  // Akumulasi waktu simulasi (detik)
+const C = {
+  surface: [255, 254, 251],
+  grid:    [236, 233, 225],
+  rule:    [214, 210, 199],
+  ink:     [29, 31, 33],
+  ink2:    [85, 88, 92],
+  ink3:    [138, 141, 145],
+  ep:      [44, 100, 176],
+  ek:      [214, 112, 24],
+  q:       [178, 58, 72],
+  em:      [29, 31, 33]
+};
+// p5 membungkus nama font berspasi dengan kutip sehingga fallback hilang,
+// jadi font kanvas diset langsung lewat drawingContext.
+const FONT_SANS = '"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONT_MONO = '"IBM Plex Mono", ui-monospace, Menlo, monospace';
 
-// State Kontrol Simulasi
-let statusJalan = false;   // Status animasi (true = jalan, false = jeda)
-let isSlowMotion = false;  // Mode gerak lambat untuk observasi detail
-let isDragging = false;    // Status interaksi drag mouse pada objek
+// Angka ditulis dengan koma desimal (format Indonesia)
+function fmt(v, d) {
+  if (Math.abs(v) < 0.5 * Math.pow(10, -d)) v = 0;
+  return v.toFixed(d).replace('.', ',').replace('-', '−');
+}
+
+function teks(str, x, y, opt) {
+  opt = opt || {};
+  noStroke();
+  fill(opt.warna || C.ink);
+  aturFont(opt.ukuran || 11, opt.mono, opt.tebal);
+  textAlign(opt.rata || LEFT, opt.vrata || BASELINE);
+  text(str, x, y);
+}
+
+function aturFont(ukuran, mono, tebal) {
+  textSize(ukuran);
+  drawingContext.font = (tebal ? '600 ' : '400 ') + ukuran + 'px ' + (mono ? FONT_MONO : FONT_SANS);
+}
+
+// ============================================================================
+// 2. VARIABEL GLOBAL FISIKA & SIMULASI
+// ============================================================================
+let massa = 2.0;          // kg
+let g = 9.8;              // m/s^2
+let muGesek = 0.00;       // koefisien redaman (0 = konservatif)
+let dt = 0.02;            // s per frame
+let skalaMeter = 42;      // 1 m = 42 px
+let yTanah = 460;         // piksel acuan h = 0
+let waktuSimulasi = 0.0;  // s
+
+const LEBAR_SIM = 600;    // kanvas 0..600 = area eksperimen, 600..980 = dasbor
+
+let statusJalan = false;
+let isSlowMotion = false;
+let isDragging = false;
 let modelAktif = 'roller_coaster'; // 'roller_coaster' | 'jatuh_bebas' | 'bandul'
 
-// Variabel Nilai Energi Terkini (Joule)
-let Ep = 0.0;
-let Ek = 0.0;
-let Em = 0.0;
-let Edisip = 0.0;
-let EmAwal = 0.0;
+let Ep = 0.0, Ek = 0.0, Em = 0.0, Edisip = 0.0, EmAwal = 0.0;
 
-// Riwayat Data untuk Grafik Real-Time
 let riwayatEnergi = [];
 const MAX_RIWAYAT = 180;
 
-// Jejak Lintasan Objek (Trail)
 let jejakObjek = [];
 const MAX_JEJAK = 40;
 
-// State Spesifik Model 1: Roller Coaster / Lintasan Melengkung
-let rc_u = 0.12;          // Posisi parametrik lintasan (0.0 sampai 1.0)
-let rc_v = 0.0;           // Kecepatan tangensial di lintasan (m/s)
-const RC_X_START = 60;    // Batas kiri lintasan (px)
-const RC_X_END = 540;     // Batas kanan lintasan (px)
+// Model 1: lintasan melengkung
+let rc_u = 0.12;          // posisi parametrik 0..1
+let rc_v = 0.0;           // kecepatan tangensial (m/s)
+const RC_X_START = 70;
+const RC_X_END = 560;
 
-// State Spesifik Model 2: Gerak Jatuh Bebas & Pantulan
-let jb_x = 300;           // Posisi horizontal tetap bola (px)
-let jb_h = 7.5;           // Ketinggian vertikal di atas tanah (m)
-let jb_v = 0.0;           // Kecepatan vertikal (m/s, positif ke atas)
+// Model 2: jatuh bebas
+let jb_x = 320;
+let jb_h = 7.5;           // m
+let jb_v = 0.0;           // m/s, positif ke atas
 
-// State Spesifik Model 3: Bandul Sederhana
-let bd_pivotX = 300;      // Titik tumpu engsel X (px)
-let bd_pivotY = 100;      // Titik tumpu engsel Y (px)
-let bd_L = 5.5;           // Panjang tali bandul (meter)
-let bd_theta = 0.85;      // Sudut simpangan dari garis vertikal (radian)
-let bd_omega = 0.0;       // Kecepatan sudut bandul (rad/s)
+// Model 3: bandul
+let bd_pivotX = 320;
+let bd_pivotY = 140;
+let bd_L = 6.0;           // m
+let bd_theta = 0.85;      // rad
+let bd_omega = 0.0;       // rad/s
 
-// Komponen Antarmuka / UI DOM (sesuai Bab 3.5 Modul Dr. Budi Adiperdana)
-let selectModel;
-let tombolMulai;
-let tombolReset;
-let tombolSlow;
-let sliderMassa;
-let sliderGravitasi;
-let sliderGesekan;
-let sliderKetinggian;
-let checkboxVektor;
-let checkboxJejak;
-let checkboxGrid;
+// Posisi awal per model. Slider, drag, dan Reset memakai sumber yang sama.
+let posisiAwal = {
+  roller_coaster: 0.12,   // u
+  jatuh_bebas: 7.5,       // h (m)
+  bandul: 49              // theta (derajat)
+};
 
-// Label Teks UI untuk memantau nilai slider
-let labelMassaVal;
-let labelGravitasiVal;
-let labelGesekanVal;
-let labelKetinggianVal;
+// Komponen UI DOM
+let selectModel, tombolMulai, tombolReset, tombolSlow, tombolSimpan;
+let sliderMassa, sliderGravitasi, sliderGesekan, sliderKetinggian;
+let checkboxVektor, checkboxJejak, checkboxGrid;
+let outMassa, outGravitasi, outGesekan, outPosisi, labelPosisi;
+let tombolPresetG = [];
 
 // ============================================================================
-// 2. FUNGSI SETUP (Inisialisasi Kanvas & Komponen UI)
+// 3. SETUP & DRAW
 // ============================================================================
 function setup() {
-  pixelDensity(1);
+  pixelDensity(Math.min(2, window.devicePixelRatio || 1));
   let canvas = createCanvas(980, 520);
-  
-  // Jika ada container HTML '#canvas-container', tautkan ke sana
-  let cContainer = select('#canvas-container');
-  if (cContainer) {
-    canvas.parent('canvas-container');
-  }
+  if (select('#canvas-container')) canvas.parent('canvas-container');
+  canvas.attribute('role', 'img');
+  canvas.attribute('aria-label', 'Simulasi energi mekanik dengan diagram batang dan grafik energi terhadap waktu');
 
-  // Buat Antarmuka Kontrol Interaktif (DOM)
   inisialisasiUI();
-
-  // Reset kondisi awal simulasi
   resetSimulasi();
 }
 
-// ============================================================================
-// 3. FUNGSI DRAW (Loop Utama Animasi & Perhitungan Frame-by-Frame)
-// ============================================================================
 function draw() {
-  // Update fisika numerik jika simulasi sedang berjalan dan tidak di-drag
   if (statusJalan && !isDragging) {
-    // Mode gerak lambat membagi delta waktu agar fenomena mudah diamati siswa
-    let effectiveDt = isSlowMotion ? dt * 0.4 : dt;
-    updateFisika(effectiveDt);
+    updateFisika(isSlowMotion ? dt * 0.4 : dt);
   } else {
-    // Jika dijeda, tetap perbarui pembacaan energi statis
     hitungEnergiStatis();
   }
 
-  // 1. Gambar Area Kiri: Lingkungan Simulasi Fisika
+  background(C.surface);
   renderLingkunganSimulasi();
 
-  // 2. Gambar Objek Fisika Sesuai Model Aktif
-  if (modelAktif === 'roller_coaster') {
-    renderRollerCoaster();
-  } else if (modelAktif === 'jatuh_bebas') {
-    renderJatuhBebas();
-  } else if (modelAktif === 'bandul') {
-    renderBandul();
-  }
+  if (modelAktif === 'roller_coaster') renderRollerCoaster();
+  else if (modelAktif === 'jatuh_bebas') renderJatuhBebas();
+  else if (modelAktif === 'bandul') renderBandul();
 
-  // 3. Gambar Area Kanan: Dasbor Analisis Energi & Grafik Real-Time
   renderDasborEnergi();
-
-  // Perbarui nilai teks slider pada panel UI
-  updateTeksUI();
 }
 
 // ============================================================================
-// 4. PEMODELAN MATEMATIKA & INTEGRASI NUMERIK SAINS KOMPUTASI
+// 4. PEMODELAN & INTEGRASI NUMERIK (Euler-Cromer)
+// v diperbarui lebih dulu dengan a(t), lalu x diperbarui dengan v yang baru.
 // ============================================================================
-
-/**
- * Pembaruan kondisi fisis menggunakan pendekatan numerik Euler-Cromer.
- * Karakteristik: Kecepatan diperbarui lebih dulu dengan percepatan saat ini,
- * lalu posisi diperbarui dengan kecepatan baru. Ini menjaga konservasi energi
- * jauh lebih stabil dibandingkan metode Euler biasa.
- */
 function updateFisika(deltaT) {
   waktuSimulasi += deltaT;
 
-  if (modelAktif === 'roller_coaster') {
-    updateFisikaRollerCoaster(deltaT);
-  } else if (modelAktif === 'jatuh_bebas') {
-    updateFisikaJatuhBebas(deltaT);
-  } else if (modelAktif === 'bandul') {
-    updateFisikaBandul(deltaT);
-  }
+  if (modelAktif === 'roller_coaster') updateFisikaRollerCoaster(deltaT);
+  else if (modelAktif === 'jatuh_bebas') updateFisikaJatuhBebas(deltaT);
+  else if (modelAktif === 'bandul') updateFisikaBandul(deltaT);
 
-  // Catat riwayat energi ke buffer array untuk plot kurva
-  riwayatEnergi.push({
-    t: waktuSimulasi,
-    Ep: Ep,
-    Ek: Ek,
-    Em: Em,
-    Edisip: Edisip
-  });
-
-  if (riwayatEnergi.length > MAX_RIWAYAT) {
-    riwayatEnergi.shift();
-  }
+  riwayatEnergi.push({ t: waktuSimulasi, Ep: Ep, Ek: Ek, Em: Em, Edisip: Edisip });
+  if (riwayatEnergi.length > MAX_RIWAYAT) riwayatEnergi.shift();
 }
 
-/**
- * Model 1: Lintasan Melengkung / Roller Coaster
- * Persamaan Ketinggian Lintasan: h(u) dalam meter, u in [0, 1]
- */
+function hitungDisipasi() {
+  Edisip = muGesek > 0 ? Math.max(0, EmAwal - Em) : 0.0;
+}
+
+// Model 1: profil lintasan h(u) dalam meter, u di [0, 1]
 function rc_getHeight(u) {
-  // Profil lintasan 2 bukit dan 1 lembah halus
   let baseH = 1.2;
   let wave = 2.9 * (1.0 - Math.cos(2.0 * Math.PI * (u - 0.5)));
   let tilt = 1.3 * (1.0 - u);
@@ -190,29 +180,26 @@ function rc_getHeight(u) {
 }
 
 function rc_getSlope(u) {
-  // Turunan analitik dh/du
-  let dWave = 5.8 * Math.PI * Math.sin(2.0 * Math.PI * (u - 0.5));
-  let dTilt = -1.3;
-  return dWave + dTilt;
+  // turunan analitik dh/du
+  return 5.8 * Math.PI * Math.sin(2.0 * Math.PI * (u - 0.5)) - 1.3;
+}
+
+function rc_x(u) {
+  return RC_X_START + u * (RC_X_END - RC_X_START);
 }
 
 function updateFisikaRollerCoaster(deltaT) {
   let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
-  let dh_du = rc_getSlope(rc_u);
-  let dh_dx = dh_du / trackWidthM;
-  let theta = Math.atan(dh_dx); // Kemiringan lintasan (radian)
+  let theta = Math.atan(rc_getSlope(rc_u) / trackWidthM);
 
-  // Percepatan tangensial sepanjang kurva:
-  // a_t = - g * sin(theta) - gaya_gesek / m
+  // a_t = -g sin(theta) - redaman * v
   let aTangensial = -g * Math.sin(theta) - (muGesek * 2.5) * rc_v;
 
-  // Integrasi Euler-Cromer
   rc_v += aTangensial * deltaT;
-  let ds = rc_v * deltaT; // perpindahan sepanjang busur lintasan
-  let du = (ds * Math.cos(theta)) / trackWidthM;
-  rc_u += du;
+  let ds = rc_v * deltaT;
+  rc_u += (ds * Math.cos(theta)) / trackWidthM;
 
-  // Pantulan elastis jika mencapai ujung lintasan
+  // pantulan di ujung lintasan
   if (rc_u < 0.03) {
     rc_u = 0.03;
     rc_v = -rc_v * (1.0 - muGesek);
@@ -221,913 +208,716 @@ function updateFisikaRollerCoaster(deltaT) {
     rc_v = -rc_v * (1.0 - muGesek);
   }
 
-  // Perhitungan Energi
   let h = rc_getHeight(rc_u);
   Ep = massa * g * h;
-  Ek = 0.5 * massa * (rc_v * rc_v);
+  Ek = 0.5 * massa * rc_v * rc_v;
   Em = Ep + Ek;
-
-  if (muGesek > 0) {
-    Edisip = Math.max(0, EmAwal - Em);
-  } else {
-    Edisip = 0.0;
-  }
-
-  // Rekam jejak posisi visual
-  let posX = RC_X_START + rc_u * (RC_X_END - RC_X_START);
-  let posY = yTanah - h * skalaMeter;
-  tambahJejak(posX, posY);
+  hitungDisipasi();
+  tambahJejak(rc_x(rc_u), yTanah - h * skalaMeter);
 }
 
-/**
- * Model 2: Gerak Jatuh Bebas & Pantulan (GLBB Vertikal 1D)
- * Diturunkan langsung dari Modul Bagian 4.3 karya Dr. Budi Adiperdana
- */
+// Model 2: jatuh bebas & pantulan (GLBB vertikal, Modul 4.3)
 function updateFisikaJatuhBebas(deltaT) {
-  // Percepatan vertikal: gravitasi ke bawah (-g) dan gaya hambatan jika ada
   let a_y = -g - (muGesek * 1.5) * jb_v;
 
-  // Integrasi Euler-Cromer
   jb_v += a_y * deltaT;
   jb_h += jb_v * deltaT;
 
-  // Kondisi saat benda menyentuh permukaan tanah (h <= 0)
   if (jb_h <= 0.0) {
     jb_h = 0.0;
-    // Koefisien restitusi (e = 1.0 jika tanpa gesekan / konservatif murni)
-    let koefRestitusi = Math.max(0.0, 1.0 - muGesek * 1.8);
+    let koefRestitusi = Math.max(0.0, 1.0 - muGesek * 1.8); // e = 1 jika mu = 0
     jb_v = -jb_v * koefRestitusi;
-
-    // Redam getaran numerik kecil saat benda berhenti total di lantai
-    if (Math.abs(jb_v) < 0.25) {
-      jb_v = 0.0;
-      jb_h = 0.0;
-    }
+    if (Math.abs(jb_v) < 0.25) jb_v = 0.0;
   }
 
-  // Perhitungan Energi
   Ep = Math.max(0, massa * g * jb_h);
-  Ek = 0.5 * massa * (jb_v * jb_v);
+  Ek = 0.5 * massa * jb_v * jb_v;
   Em = Ep + Ek;
-
-  if (muGesek > 0) {
-    Edisip = Math.max(0, EmAwal - Em);
-  } else {
-    Edisip = 0.0;
-  }
-
-  let posX = jb_x;
-  let posY = yTanah - jb_h * skalaMeter;
-  tambahJejak(posX, posY);
+  hitungDisipasi();
+  tambahJejak(jb_x, yTanah - jb_h * skalaMeter);
 }
 
-/**
- * Model 3: Ayunan Bandul Sederhana (Harmonic Motion)
- */
+// Model 3: bandul sederhana
 function updateFisikaBandul(deltaT) {
-  // Percepatan sudut: alpha = - (g / L) * sin(theta) - redaman * omega
   let alpha = -(g / bd_L) * Math.sin(bd_theta) - (muGesek * 1.8) * bd_omega;
 
-  // Integrasi Euler-Cromer
   bd_omega += alpha * deltaT;
   bd_theta += bd_omega * deltaT;
 
-  // Ketinggian relatif terhadap titik terendah ayunan
-  let h = bd_L * (1.0 - Math.cos(bd_theta));
-  let v = bd_L * bd_omega; // Kecepatan linier tangensial (m/s)
+  let h = bd_L * (1.0 - Math.cos(bd_theta)); // relatif terhadap titik terendah
+  let v = bd_L * bd_omega;
 
-  // Perhitungan Energi
   Ep = Math.max(0, massa * g * h);
-  Ek = 0.5 * massa * (v * v);
+  Ek = 0.5 * massa * v * v;
   Em = Ep + Ek;
-
-  if (muGesek > 0) {
-    Edisip = Math.max(0, EmAwal - Em);
-  } else {
-    Edisip = 0.0;
-  }
-
-  let posX = bd_pivotX + bd_L * skalaMeter * Math.sin(bd_theta);
-  let posY = bd_pivotY + bd_L * skalaMeter * Math.cos(bd_theta);
-  tambahJejak(posX, posY);
+  hitungDisipasi();
+  tambahJejak(bandulX(), bandulY());
 }
 
-/**
- * Menghitung energi statis saat simulasi dijeda atau saat objek di-drag.
- */
+function bandulX() { return bd_pivotX + bd_L * skalaMeter * Math.sin(bd_theta); }
+function bandulY() { return bd_pivotY + bd_L * skalaMeter * Math.cos(bd_theta); }
+
+function ketinggianSaatIni() {
+  if (modelAktif === 'roller_coaster') return rc_getHeight(rc_u);
+  if (modelAktif === 'jatuh_bebas') return Math.max(0, jb_h);
+  return bd_L * (1.0 - Math.cos(bd_theta));
+}
+
+function kelajuanSaatIni() {
+  if (modelAktif === 'roller_coaster') return Math.abs(rc_v);
+  if (modelAktif === 'jatuh_bebas') return Math.abs(jb_v);
+  return Math.abs(bd_L * bd_omega);
+}
+
 function hitungEnergiStatis() {
-  if (modelAktif === 'roller_coaster') {
-    let h = rc_getHeight(rc_u);
-    Ep = massa * g * h;
-    Ek = 0.5 * massa * (rc_v * rc_v);
-  } else if (modelAktif === 'jatuh_bebas') {
-    Ep = massa * g * Math.max(0, jb_h);
-    Ek = 0.5 * massa * (jb_v * jb_v);
-  } else if (modelAktif === 'bandul') {
-    let h = bd_L * (1.0 - Math.cos(bd_theta));
-    let v = bd_L * bd_omega;
-    Ep = massa * g * Math.max(0, h);
-    Ek = 0.5 * massa * (v * v);
-  }
+  let v = kelajuanSaatIni();
+  Ep = massa * g * ketinggianSaatIni();
+  Ek = 0.5 * massa * v * v;
   Em = Ep + Ek;
-  if (muGesek <= 0.0001) {
-    Edisip = 0.0;
-  }
+  if (muGesek <= 0.0001) Edisip = 0.0;
 }
 
 function tambahJejak(px, py) {
-  jejakObjek.push({ x: px, y: py, umur: 1.0 });
-  if (jejakObjek.length > MAX_JEJAK) {
-    jejakObjek.shift();
-  }
+  jejakObjek.push({ x: px, y: py });
+  if (jejakObjek.length > MAX_JEJAK) jejakObjek.shift();
 }
 
 // ============================================================================
-// 5. RENDER VISUAL SIMULASI (Area Kiri: Kanvas 0 s/d 600 px)
+// 5. RENDER AREA EKSPERIMEN (x = 0..600)
 // ============================================================================
 
+// Garis h = 0: tanah untuk lintasan & jatuh bebas, titik terendah untuk bandul
+function yNol() {
+  return modelAktif === 'bandul' ? bd_pivotY + bd_L * skalaMeter : yTanah;
+}
+
 function renderLingkunganSimulasi() {
-  // Latar belakang area eksperimen fisika
-  noStroke();
-  fill(244, 247, 251);
-  rect(0, 0, 600, height);
+  let y0 = yNol();
+  let xSumbu = 44;
 
-  // Garis Grid Bantu Koordinat (jika checkbox dicentang)
   if (checkboxGrid.checked()) {
-    stroke(226, 232, 240);
+    stroke(C.grid);
     strokeWeight(1);
-    // Garis horizontal tiap 1 meter (skalaMeter piksel)
-    for (let py = yTanah; py >= 30; py -= skalaMeter) {
-      line(0, py, 600, py);
-    }
-    for (let px = 40; px < 600; px += skalaMeter) {
-      line(px, 0, px, yTanah);
-    }
+    for (let py = y0; py >= 24; py -= skalaMeter) line(xSumbu, py, LEBAR_SIM, py);
+    for (let px = xSumbu; px < LEBAR_SIM; px += skalaMeter) line(px, 24, px, y0);
   }
 
-  // Penggaris Skala Ketinggian Sumbu Y di sisi kiri
-  stroke(148, 163, 184);
-  strokeWeight(2);
-  line(38, 30, 38, yTanah);
+  // Penggaris h
+  stroke(C.rule);
+  strokeWeight(1);
+  line(xSumbu, 24, xSumbu, y0);
+  for (let m = 0; y0 - m * skalaMeter >= 24; m++) {
+    let py = y0 - m * skalaMeter;
+    stroke(C.ink3);
+    line(xSumbu - 4, py, xSumbu, py);
+    teks(String(m), xSumbu - 8, py, { mono: true, ukuran: 10, warna: C.ink3, rata: RIGHT, vrata: CENTER });
+  }
+  teks('h (m)', 12, 14, { ukuran: 10, warna: C.ink3, vrata: CENTER });
 
-  for (let m = 0; m <= 10; m++) {
-    let py = yTanah - m * skalaMeter;
-    if (py >= 20) {
-      stroke(100, 116, 139);
-      strokeWeight(m % 2 === 0 ? 2 : 1);
-      line(32, py, 38, py);
-
-      noStroke();
-      fill(100, 116, 139);
-      textSize(10);
-      textAlign(RIGHT, CENTER);
-      text(m + " m", 28, py);
-    }
+  if (modelAktif !== 'bandul') {
+    // Tanah
+    stroke(C.ink2);
+    strokeWeight(1.5);
+    line(xSumbu, yTanah, LEBAR_SIM - 16, yTanah);
+    stroke(C.rule);
+    strokeWeight(1);
+    for (let px = xSumbu + 8; px < LEBAR_SIM - 16; px += 10) line(px, yTanah + 1, px - 8, yTanah + 9);
+  } else {
+    // Acuan h = 0 bandul
+    stroke(C.rule);
+    strokeWeight(1);
+    drawingContext.setLineDash([4, 4]);
+    line(xSumbu, y0, LEBAR_SIM - 16, y0);
+    drawingContext.setLineDash([]);
+    teks('titik terendah, h = 0', LEBAR_SIM - 16, y0 - 6, { ukuran: 10, warna: C.ink3, rata: RIGHT });
   }
 
-  // Label sumbu ketinggian
-  push();
-  translate(14, yTanah / 2);
-  rotate(-HALF_PI);
-  textAlign(CENTER, CENTER);
-  textSize(11);
-  textStyle(BOLD);
-  fill(71, 85, 105);
-  text("Ketinggian h (meter)", 0, 0);
-  pop();
-
-  // Garis Permukaan Tanah (h = 0)
-  stroke(71, 85, 105);
-  strokeWeight(3);
-  line(0, yTanah, 600, yTanah);
-
-  // Arsir Pola Tanah Teknik (Hatched Ground Pattern)
-  stroke(148, 163, 184);
-  strokeWeight(1.5);
-  for (let px = 0; px < 600; px += 16) {
-    line(px, yTanah, px - 10, yTanah + 14);
-  }
-
-  // Label Acuan Ketinggian Tanah
-  noStroke();
-  fill(15, 23, 42);
-  textSize(12);
-  textStyle(BOLD);
-  textAlign(LEFT, TOP);
-  text("Garis Acuan Tanah (h = 0 m | Ep = 0 J)", 50, yTanah + 16);
-
-  // Gambar Jejak Lintasan (Trail) jika diaktifkan
   if (checkboxJejak.checked() && jejakObjek.length > 1) {
     noFill();
     for (let i = 1; i < jejakObjek.length; i++) {
-      let alphaVal = map(i, 0, jejakObjek.length, 20, 180);
-      stroke(59, 130, 246, alphaVal);
-      strokeWeight(map(i, 0, jejakObjek.length, 1.5, 4));
+      let k = i / jejakObjek.length;
+      stroke(C.ink3[0], C.ink3[1], C.ink3[2], 30 + 150 * k);
+      strokeWeight(1 + 2 * k);
       line(jejakObjek[i - 1].x, jejakObjek[i - 1].y, jejakObjek[i].x, jejakObjek[i].y);
     }
   }
 
-  // Indikator Status & Bantuan Pengoperasian di Kanvas
-  fill(15, 23, 42);
-  textSize(13);
-  textStyle(BOLD);
-  textAlign(LEFT, TOP);
-  let statusStr = statusJalan ? (isSlowMotion ? "STATUS: BERJALAN (Slow-Mo 0.4x)" : "STATUS: BERJALAN (Normal)") : "STATUS: DIJEDA / SIAP";
-  text(statusStr, 50, 16);
+  // Status ringkas di bawah tanah
+  let status;
+  if (isDragging) status = 'Mengatur posisi awal';
+  else if (statusJalan) status = 'Berjalan · ' + (isSlowMotion ? '0,4×' : '1×');
+  else status = 'Dijeda · seret bola untuk mengatur posisi awal';
+  teks(status, xSumbu, 500, { ukuran: 11, warna: statusJalan ? C.ink2 : C.ink3 });
 
-  textSize(11);
-  textStyle(NORMAL);
-  fill(100, 116, 139);
-  text("Tip: Klik & geser bola dengan mouse untuk mengatur ketinggian awal", 50, 36);
-}
-
-/**
- * Render Model 1: Roller Coaster
- */
-function renderRollerCoaster() {
-  let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
-
-  // Gambar Pilar Penyangga Rel ke Tanah
-  stroke(203, 213, 225);
-  strokeWeight(2);
-  for (let u = 0.05; u <= 0.95; u += 0.08) {
-    let px = RC_X_START + u * (RC_X_END - RC_X_START);
-    let py = yTanah - rc_getHeight(u) * skalaMeter;
-    line(px, py, px, yTanah);
-  }
-
-  // Gambar Rel Ganda (Track)
-  noFill();
-  stroke(100, 116, 139);
-  strokeWeight(5);
-  beginShape();
-  for (let u = 0.0; u <= 1.0; u += 0.015) {
-    let px = RC_X_START + u * (RC_X_END - RC_X_START);
-    let py = yTanah - rc_getHeight(u) * skalaMeter;
-    vertex(px, py);
-  }
-  endShape();
-
-  stroke(59, 130, 246);
-  strokeWeight(2.5);
-  beginShape();
-  for (let u = 0.0; u <= 1.0; u += 0.015) {
-    let px = RC_X_START + u * (RC_X_END - RC_X_START);
-    let py = yTanah - rc_getHeight(u) * skalaMeter - 3;
-    vertex(px, py);
-  }
-  endShape();
-
-  // Posisi Benda Terkini
-  let hBenda = rc_getHeight(rc_u);
-  let bendaX = RC_X_START + rc_u * (RC_X_END - RC_X_START);
-  let bendaY = yTanah - hBenda * skalaMeter;
-  let radiusVisual = map(massa, 0.5, 5.0, 12, 22);
-
-  // Garis Bantu Dimensi Ketinggian (h)
-  stroke(16, 185, 129, 180);
-  strokeWeight(1.5);
-  drawingContext.setLineDash([4, 4]);
-  line(bendaX, bendaY, bendaX, yTanah);
-  drawingContext.setLineDash([]);
-
-  noStroke();
-  fill(16, 185, 129);
-  textSize(11);
-  textStyle(BOLD);
-  textAlign(LEFT, CENTER);
-  text("h = " + nf(hBenda, 1, 2) + " m", bendaX + radiusVisual + 6, (bendaY + yTanah) / 2);
-
-  // Gambar Benda Bola Berkilau
-  renderBola(bendaX, bendaY, radiusVisual);
-
-  // Vektor Kecepatan (jika checkbox dicentang)
-  if (checkboxVektor.checked()) {
-    let dh_du = rc_getSlope(rc_u);
-    let dh_dx = dh_du / trackWidthM;
-    let theta = Math.atan(dh_dx);
-    let vx = rc_v * Math.cos(theta);
-    let vy = -rc_v * Math.sin(theta); // Negatif karena sumbu Y kanvas terbalik
-    renderPanahVektor(bendaX, bendaY, vx, vy, "v = " + nf(Math.abs(rc_v), 1, 2) + " m/s");
-  }
-}
-
-/**
- * Render Model 2: Jatuh Bebas & Pantulan
- */
-function renderJatuhBebas() {
-  let radiusVisual = map(massa, 0.5, 5.0, 14, 26);
-  let bendaX = jb_x;
-  let bendaY = yTanah - jb_h * skalaMeter;
-
-  // Tiang Menara Acuan
-  stroke(226, 232, 240);
-  strokeWeight(6);
-  line(bendaX - 50, 40, bendaX - 50, yTanah);
-  stroke(148, 163, 184);
-  strokeWeight(2);
-  line(bendaX - 50, 40, bendaX - 50, yTanah);
-
-  // Landasan Pantul di Tanah
-  noStroke();
-  fill(71, 85, 105);
-  rect(bendaX - 40, yTanah - 4, 80, 8, 3);
-
-  // Bayangan di Tanah (Membesar saat mendekati tanah)
-  let shadowAlpha = map(jb_h, 0, 8, 160, 20);
-  let shadowWidth = map(jb_h, 0, 8, radiusVisual * 2.2, radiusVisual * 0.8);
-  fill(15, 23, 42, shadowAlpha);
-  ellipse(bendaX, yTanah, shadowWidth, 8);
-
-  // Garis Bantu Dimensi Ketinggian (h)
-  stroke(16, 185, 129, 180);
-  strokeWeight(1.5);
-  drawingContext.setLineDash([4, 4]);
-  line(bendaX + 35, bendaY, bendaX + 35, yTanah);
-  line(bendaX, bendaY, bendaX + 40, bendaY);
-  drawingContext.setLineDash([]);
-
-  noStroke();
-  fill(16, 185, 129);
-  textSize(11);
-  textStyle(BOLD);
-  textAlign(LEFT, CENTER);
-  text("h = " + nf(jb_h, 1, 2) + " m", bendaX + 42, (bendaY + yTanah) / 2);
-
-  // Gambar Benda Bola
-  renderBola(bendaX, bendaY, radiusVisual);
-
-  // Vektor Kecepatan (jika dicentang)
-  if (checkboxVektor.checked()) {
-    renderPanahVektor(bendaX, bendaY, 0, -jb_v, "v = " + nf(jb_v, 1, 2) + " m/s");
-  }
-}
-
-/**
- * Render Model 3: Bandul Sederhana
- */
-function renderBandul() {
-  let radiusVisual = map(massa, 0.5, 5.0, 14, 26);
-  let bobX = bd_pivotX + bd_L * skalaMeter * Math.sin(bd_theta);
-  let bobY = bd_pivotY + bd_L * skalaMeter * Math.cos(bd_theta);
-  let lowestY = bd_pivotY + bd_L * skalaMeter;
-  let hBenda = bd_L * (1.0 - Math.cos(bd_theta));
-
-  // Tumpuan Plafon / Engsel
-  fill(71, 85, 105);
-  noStroke();
-  rect(bd_pivotX - 40, bd_pivotY - 14, 80, 14, 4);
-  fill(203, 213, 225);
-  circle(bd_pivotX, bd_pivotY, 10);
-
-  // Garis Putus-Putus Sumbu Vertikal Acuan Simetri
-  stroke(148, 163, 184, 150);
+  // Pemisah area eksperimen dan dasbor
+  stroke(C.rule);
   strokeWeight(1);
-  drawingContext.setLineDash([4, 4]);
-  line(bd_pivotX, bd_pivotY, bd_pivotX, lowestY + 30);
-  drawingContext.setLineDash([]);
+  line(LEBAR_SIM + 0.5, 0, LEBAR_SIM + 0.5, height);
+}
 
-  // Tali Bandul
-  stroke(51, 65, 85);
-  strokeWeight(2.5);
-  line(bd_pivotX, bd_pivotY, bobX, bobY);
+function radiusBola() {
+  return map(massa, 0.5, 5.0, 11, 22);
+}
 
-  // Garis Acuan Ketinggian Terendah Bandul
-  stroke(148, 163, 184, 120);
+// Garis ukur h dari benda ke garis acuan, warna Ep
+function renderUkuranH(x, yBenda, yAcuan, h, offset) {
+  if (h < 0.05) return;
+  let xg = x + offset;
+  stroke(C.ep);
   strokeWeight(1);
   drawingContext.setLineDash([3, 3]);
-  line(bd_pivotX - 120, lowestY, bd_pivotX + 120, lowestY);
-  line(bobX, bobY, bobX + 30, bobY);
-  line(bobX + 25, bobY, bobX + 25, lowestY);
+  line(x, yBenda, xg + 4, yBenda);
+  drawingContext.setLineDash([]);
+  line(xg, yBenda, xg, yAcuan);
+  line(xg - 3, yBenda, xg + 3, yBenda);
+  line(xg - 3, yAcuan, xg + 3, yAcuan);
+  teks('h = ' + fmt(h, 2) + ' m', xg + 6, (yBenda + yAcuan) / 2, { mono: true, ukuran: 11, warna: C.ep, vrata: CENTER });
+}
+
+function renderRollerCoaster() {
+  // Penyangga
+  stroke(C.grid);
+  strokeWeight(2);
+  for (let u = 0.06; u <= 0.95; u += 0.08) {
+    line(rc_x(u), yTanah - rc_getHeight(u) * skalaMeter, rc_x(u), yTanah);
+  }
+
+  // Rel
+  noFill();
+  stroke(C.ink2);
+  strokeWeight(3);
+  beginShape();
+  for (let u = 0.0; u <= 1.0001; u += 0.01) vertex(rc_x(u), yTanah - rc_getHeight(u) * skalaMeter);
+  endShape();
+
+  let r = radiusBola();
+  let h = rc_getHeight(rc_u);
+  let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
+  let theta = Math.atan(rc_getSlope(rc_u) / trackWidthM);
+  // Titik kontak di rel; bola digeser sepanjang normal agar duduk di atas rel
+  let kx = rc_x(rc_u);
+  let ky = yTanah - h * skalaMeter;
+  let bx = kx - Math.sin(theta) * (r + 1.5);
+  let by = ky - Math.cos(theta) * (r + 1.5);
+
+  renderUkuranH(kx, ky, yTanah, h, r + 18);
+  renderBola(bx, by, r);
+
+  if (checkboxVektor.checked()) {
+    renderPanahVektor(bx, by, rc_v * Math.cos(theta), -rc_v * Math.sin(theta), Math.abs(rc_v), r);
+  }
+}
+
+function renderJatuhBebas() {
+  let r = radiusBola();
+  let bx = jb_x;
+  let by = yTanah - jb_h * skalaMeter - r;
+
+  // Bayangan: makin dekat tanah makin pekat
+  noStroke();
+  let k = constrain(jb_h / 9.5, 0, 1);
+  fill(C.ink[0], C.ink[1], C.ink[2], 70 - 55 * k);
+  ellipse(bx, yTanah + 1, r * (2.4 - 1.4 * k), 5);
+
+  renderUkuranH(bx, by + r, yTanah, jb_h, r + 22);
+  renderBola(bx, by, r);
+
+  if (checkboxVektor.checked()) {
+    renderPanahVektor(bx, by, 0, -jb_v, Math.abs(jb_v), r);
+  }
+}
+
+function renderBandul() {
+  let r = radiusBola();
+  let bx = bandulX();
+  let by = bandulY();
+  let y0 = yNol();
+  let h = bd_L * (1.0 - Math.cos(bd_theta));
+
+  // Tumpuan
+  noStroke();
+  fill(C.ink2);
+  rect(bd_pivotX - 36, bd_pivotY - 10, 72, 6);
+  stroke(C.rule);
+  strokeWeight(1);
+  for (let px = bd_pivotX - 34; px < bd_pivotX + 36; px += 8) line(px, bd_pivotY - 10, px + 6, bd_pivotY - 16);
+
+  // Sumbu vertikal
+  stroke(C.rule);
+  drawingContext.setLineDash([4, 4]);
+  line(bd_pivotX, bd_pivotY, bd_pivotX, y0);
   drawingContext.setLineDash([]);
 
-  noStroke();
-  fill(16, 185, 129);
-  textSize(11);
-  textStyle(BOLD);
-  textAlign(LEFT, CENTER);
-  text("h = " + nf(hBenda, 1, 2) + " m", bobX + 30, (bobY + lowestY) / 2);
-
-  // Gambar Busur Simpangan Sudut Theta
-  let arcRadius = 70;
+  // Busur sudut
   noFill();
-  stroke(245, 158, 11);
-  strokeWeight(2);
-  let startAngle = bd_theta >= 0 ? HALF_PI : HALF_PI + bd_theta;
-  let endAngle = bd_theta >= 0 ? HALF_PI + bd_theta : HALF_PI;
-  arc(bd_pivotX, bd_pivotY, arcRadius, arcRadius, startAngle, endAngle);
+  stroke(C.ink3);
+  strokeWeight(1);
+  let a0 = bd_theta >= 0 ? HALF_PI - bd_theta : HALF_PI;
+  let a1 = bd_theta >= 0 ? HALF_PI : HALF_PI - bd_theta;
+  arc(bd_pivotX, bd_pivotY, 90, 90, a0, a1);
+  // label sudut di sisi sumbu yang berlawanan dengan tali
+  let sisi = bd_theta >= 0 ? -1 : 1;
+  teks('θ = ' + fmt(degrees(bd_theta), 0) + '°', bd_pivotX + sisi * 8, bd_pivotY + 40,
+    { mono: true, ukuran: 11, warna: C.ink2, rata: sisi < 0 ? RIGHT : LEFT, vrata: CENTER });
 
-  fill(245, 158, 11);
+  // Tali
+  stroke(C.ink2);
+  strokeWeight(1.5);
+  line(bd_pivotX, bd_pivotY, bx, by);
   noStroke();
-  textSize(11);
-  textAlign(CENTER, TOP);
-  let thetaDeg = (bd_theta * 180 / Math.PI);
-  text("θ = " + nf(thetaDeg, 1, 1) + "°", bd_pivotX + (bd_theta >= 0 ? 30 : -30), bd_pivotY + 45);
+  fill(C.ink);
+  circle(bd_pivotX, bd_pivotY, 6);
 
-  // Gambar Benda Bob Bandul
-  renderBola(bobX, bobY, radiusVisual);
-
-  // Vektor Kecepatan Linier (Tegak lurus terhadap tali)
-  if (checkboxVektor.checked()) {
-    let linSpeed = bd_L * bd_omega;
-    let vx = linSpeed * Math.cos(bd_theta);
-    let vy = -linSpeed * Math.sin(bd_theta);
-    renderPanahVektor(bobX, bobY, vx, vy, "v = " + nf(Math.abs(linSpeed), 1, 2) + " m/s");
-  }
-}
-
-/**
- * Render visual bola dengan gradien bayangan dan highlight refleksi
- */
-function renderBola(bx, by, r) {
-  // Cincin interaktif jika mouse berada di atas bola
-  let dMouse = dist(mouseX, mouseY, bx, by);
-  if (dMouse < r + 8 || isDragging) {
-    stroke(59, 130, 246, 200);
-    strokeWeight(2);
-    noFill();
-    circle(bx, by, (r + 7) * 2);
-    cursor(HAND);
+  let arah = bd_theta >= 0 ? 1 : -1;
+  if (arah > 0) {
+    renderUkuranH(bx, by, y0, h, r + 18);
   } else {
-    cursor(ARROW);
+    // ukuran h di sisi kiri agar tidak menabrak tali
+    if (h >= 0.05) {
+      let xg = bx - r - 18;
+      stroke(C.ep);
+      strokeWeight(1);
+      drawingContext.setLineDash([3, 3]);
+      line(bx, by, xg - 4, by);
+      drawingContext.setLineDash([]);
+      line(xg, by, xg, y0);
+      line(xg - 3, by, xg + 3, by);
+      line(xg - 3, y0, xg + 3, y0);
+      teks('h = ' + fmt(h, 2) + ' m', xg - 6, (by + y0) / 2, { mono: true, ukuran: 11, warna: C.ep, rata: RIGHT, vrata: CENTER });
+    }
   }
 
-  // Badan Bola Utama
+  renderBola(bx, by, r);
+
+  if (checkboxVektor.checked()) {
+    let vLin = bd_L * bd_omega;
+    renderPanahVektor(bx, by, vLin * Math.cos(bd_theta), -vLin * Math.sin(bd_theta), Math.abs(vLin), r);
+  }
+}
+
+function posisiBola() {
+  let r = radiusBola();
+  if (modelAktif === 'roller_coaster') {
+    let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
+    let theta = Math.atan(rc_getSlope(rc_u) / trackWidthM);
+    return {
+      x: rc_x(rc_u) - Math.sin(theta) * (r + 1.5),
+      y: yTanah - rc_getHeight(rc_u) * skalaMeter - Math.cos(theta) * (r + 1.5),
+      r: r
+    };
+  }
+  if (modelAktif === 'jatuh_bebas') return { x: jb_x, y: yTanah - jb_h * skalaMeter - r, r: r };
+  return { x: bandulX(), y: bandulY(), r: r };
+}
+
+function renderBola(bx, by, r) {
+  let hover = dist(mouseX, mouseY, bx, by) < r + 10;
+  if (hover || isDragging) {
+    noFill();
+    stroke(C.ink3);
+    strokeWeight(1);
+    circle(bx, by, (r + 6) * 2);
+  }
+  cursor(isDragging ? 'grabbing' : (hover ? 'grab' : ARROW));
+
   noStroke();
-  fill(37, 99, 235);
+  fill(C.ink);
   circle(bx, by, r * 2);
-
-  // Highlight Refleksi Cahaya (3D Specular Look)
-  fill(255, 255, 255, 140);
-  circle(bx - r * 0.35, by - r * 0.35, r * 0.7);
-
-  fill(255, 255, 255, 220);
-  circle(bx - r * 0.4, by - r * 0.4, r * 0.3);
 }
 
-/**
- * Render panah vektor kecepatan dengan kepala panah jelas
- */
-function renderPanahVektor(x, y, vx, vy, label) {
-  let scaleV = 6.5; // Faktor pembesaran visual panjang panah
-  let endX = x + vx * scaleV;
-  let endY = y + vy * scaleV;
-  let magV = Math.sqrt(vx * vx + vy * vy);
+// Vektor kecepatan, warna Ek
+function renderPanahVektor(x, y, vx, vy, kelajuan, r) {
+  let skala = 6.5;
+  let ex = x + vx * skala;
+  let ey = y + vy * skala;
+  if (kelajuan < 0.05) return;
 
-  stroke(220, 38, 38);
-  strokeWeight(2.5);
-  line(x, y, endX, endY);
-
-  // Kepala panah (arrowhead) jika vektor cukup panjang
-  if (magV > 0.1) {
-    let angle = Math.atan2(vy, vx);
-    let headSize = 8;
-    push();
-    translate(endX, endY);
-    rotate(angle);
-    fill(220, 38, 38);
-    noStroke();
-    triangle(0, 0, -headSize, -headSize / 2, -headSize, headSize / 2);
-    pop();
-  }
-
-  // Label Vektor
-  noStroke();
-  fill(185, 28, 28);
-  textSize(11);
-  textStyle(BOLD);
-  textAlign(LEFT, BOTTOM);
-  text(label, endX + 8, endY - 4);
-}
-
-// ============================================================================
-// 6. RENDER DASBOR ANALISIS ENERGI (Area Kanan: Kanvas 600 s/d 980 px)
-// ============================================================================
-
-function renderDasborEnergi() {
-  let startX = 600;
-  let dashW = width - startX;
-
-  // Latar Belakang Kartu Dasbor (Modern Slate Theme)
-  noStroke();
-  fill(15, 23, 42); // slate-900
-  rect(startX, 0, dashW, height);
-
-  // Garis Pembatas Vertikal
-  stroke(30, 41, 59);
+  stroke(C.ek);
   strokeWeight(2);
-  line(startX, 0, startX, height);
+  line(x, y, ex, ey);
 
-  // Header Judul Dasbor
-  fill(248, 250, 252);
-  textSize(15);
-  textStyle(BOLD);
-  textAlign(LEFT, TOP);
-  text("ANALISIS ENERGI MEKANIK", startX + 20, 16);
+  let sudut = Math.atan2(vy, vx);
+  push();
+  translate(ex, ey);
+  rotate(sudut);
+  noStroke();
+  fill(C.ek);
+  triangle(2, 0, -8, -4.5, -8, 4.5);
+  pop();
 
-  fill(148, 163, 184);
-  textSize(11);
-  textStyle(NORMAL);
-  text("Hukum Kekekalan: Em = Ep + Ek = Konstan", startX + 20, 36);
+  // label di ujung panah, digeser searah panah
+  let jarak = Math.max(kelajuan * skala, (r || 0) + 4) + 10;
+  let lx = x + Math.cos(sudut) * jarak;
+  let ly = y + Math.sin(sudut) * jarak;
+  teks('v = ' + fmt(kelajuan, 2) + ' m/s', lx, ly, {
+    mono: true, ukuran: 11, warna: C.ek,
+    rata: Math.cos(sudut) >= 0 ? LEFT : RIGHT, vrata: CENTER
+  });
+}
 
-  // Diagram Batang Energi Real-Time (Energy Bar Chart)
-  let barY = 65;
-  let barMaxW = dashW - 40;
+// ============================================================================
+// 6. DASBOR ENERGI (x = 600..980)
+// ============================================================================
+function renderDasborEnergi() {
+  let x0 = LEBAR_SIM + 24;
+  let w = width - x0 - 24;
   let refTotal = Math.max(EmAwal, Em, 1.0);
 
-  // 1. Energi Potensial (Ep = m * g * h) -> Warna Hijau Emerald
-  renderBarEnergi(
-    startX + 20,
-    barY,
-    barMaxW,
-    "Energi Potensial (Ep = m·g·h)",
-    Ep,
-    refTotal,
-    color(16, 185, 129),
-    color(5, 150, 105)
-  );
+  // --- Diagram batang ---
+  teks('Energi', x0, 24, { ukuran: 13, tebal: true });
+  teks('joule', x0 + 50, 24, { ukuran: 11, warna: C.ink3 });
+  teks('E₀ = ' + fmt(EmAwal, 1) + ' J', x0 + w, 24, { mono: true, ukuran: 11, warna: C.ink2, rata: RIGHT });
 
-  // 2. Energi Kinetik (Ek = 0.5 * m * v^2) -> Warna Biru Langit
-  renderBarEnergi(
-    startX + 20,
-    barY + 45,
-    barMaxW,
-    "Energi Kinetik (Ek = ½·m·v²)",
-    Ek,
-    refTotal,
-    color(14, 165, 233),
-    color(2, 132, 199)
-  );
+  let dasar = 204;
+  let tinggiMaks = 148;
+  let slot = w / 4;
+  let batang = [
+    { sim: 'Ep', nilai: Ep, warna: C.ep },
+    { sim: 'Ek', nilai: Ek, warna: C.ek },
+    { sim: 'Q', nilai: Edisip, warna: C.q },
+    { sim: 'Em', nilai: Em, warna: C.em }
+  ];
 
-  // 3. Energi Disipasi / Termal (jika ada gesekan) -> Warna Merah Coral
-  renderBarEnergi(
-    startX + 20,
-    barY + 90,
-    barMaxW,
-    "Energi Terdisipasi / Kalor (W_gesek)",
-    Edisip,
-    refTotal,
-    color(244, 63, 94),
-    color(225, 29, 72)
-  );
-
-  // 4. Energi Mekanik Total (Em = Ep + Ek) -> Warna Emas / Amber
-  renderBarEnergi(
-    startX + 20,
-    barY + 135,
-    barMaxW,
-    "Energi Mekanik Total (Em = Ep + Ek)",
-    Em,
-    refTotal,
-    color(245, 158, 11),
-    color(217, 119, 6)
-  );
-
-  // Grafik Kurva Energi Terhadap Waktu (Sesuai Konsep Kode 4.4.3 Plot Sinusoid Modul)
-  let graphX = startX + 20;
-  let graphY = 270;
-  let graphW = dashW - 40;
-  let graphH = 130;
-  renderGrafikEnergi(graphX, graphY, graphW, graphH, refTotal);
-
-  // Kotak Telemetri Nilai Fisis Terkini
-  let infoY = 420;
-  fill(30, 41, 59);
-  noStroke();
-  rect(startX + 20, infoY, dashW - 40, 85, 6);
-
-  // Teks Indikator Nilai Fisis
-  fill(226, 232, 240);
-  textSize(12);
-  textStyle(BOLD);
-  textAlign(LEFT, TOP);
-  text("Parameter Fisis Terkini:", startX + 32, infoY + 10);
-
-  textStyle(NORMAL);
-  textSize(11);
-  fill(203, 213, 225);
-
-  let curH = modelAktif === 'roller_coaster' ? rc_getHeight(rc_u) : (modelAktif === 'jatuh_bebas' ? jb_h : bd_L * (1 - Math.cos(bd_theta)));
-  let curV = modelAktif === 'roller_coaster' ? Math.abs(rc_v) : (modelAktif === 'jatuh_bebas' ? Math.abs(jb_v) : Math.abs(bd_L * bd_omega));
-
-  text("Ketinggian (h)  : " + nf(curH, 1, 2) + " m", startX + 32, infoY + 30);
-  text("Kecepatan (v)   : " + nf(curV, 1, 2) + " m/s", startX + 32, infoY + 46);
-  text("Massa (m)       : " + nf(massa, 1, 1) + " kg", startX + 200, infoY + 30);
-  text("Gravitasi (g)   : " + nf(g, 1, 1) + " m/s²", startX + 200, infoY + 46);
-
-  // Badge Status Konservasi
-  let statusKonservasi = muGesek <= 0.0001 ? "KONSERVATIF MURNI (Em = Konstan 100%)" : "NON-KONSERVATIF (Disipasi Friksi)";
-  fill(muGesek <= 0.0001 ? color(16, 185, 129) : color(244, 63, 94));
-  textStyle(BOLD);
-  text("Status: " + statusKonservasi, startX + 32, infoY + 65);
-}
-
-/**
- * Komponen Diagram Batang Energi
- */
-function renderBarEnergi(x, y, w, title, val, maxVal, cFill, cBorder) {
-  noStroke();
-  fill(203, 213, 225);
-  textSize(11);
-  textStyle(NORMAL);
-  textAlign(LEFT, BOTTOM);
-  text(title, x, y + 14);
-
-  // Nilai Angka Joule
-  textAlign(RIGHT, BOTTOM);
-  textStyle(BOLD);
-  fill(cFill);
-  text(nf(val, 1, 1) + " J", x + w, y + 14);
-
-  // Rel Dasar Batang (Background Track)
-  fill(30, 41, 59);
-  rect(x, y + 17, w, 14, 4);
-
-  // Isi Batang (Fill Progress)
-  let rasio = constrain(val / maxVal, 0, 1);
-  if (rasio > 0.001) {
-    fill(cFill);
-    rect(x, y + 17, w * rasio, 14, 4);
-  }
-}
-
-/**
- * Komponen Plot Kurva Energi Terhadap Waktu (Time-Series)
- */
-function renderGrafikEnergi(gx, gy, gw, gh, maxEnergy) {
-  // Latar Belakang Kotak Grafik
-  fill(15, 23, 42);
-  stroke(51, 65, 85);
+  // garis acuan E0
+  let yE0 = dasar - (EmAwal / refTotal) * tinggiMaks;
+  stroke(C.rule);
   strokeWeight(1);
-  rect(gx, gy, gw, gh, 6);
+  drawingContext.setLineDash([3, 3]);
+  line(x0, yE0, x0 + w, yE0);
+  drawingContext.setLineDash([]);
 
-  // Garis Sumbu & Grid Internal
-  stroke(30, 41, 59);
-  line(gx, gy + gh / 2, gx + gw, gy + gh / 2);
+  for (let i = 0; i < batang.length; i++) {
+    let b = batang[i];
+    let cx = x0 + slot * i + slot / 2;
+    let bw = 36;
+    let bh = constrain(b.nilai / refTotal, 0, 1) * tinggiMaks;
+    noStroke();
+    fill(b.warna);
+    rect(cx - bw / 2, dasar - bh, bw, bh);
+    teks(b.sim, cx, dasar + 18, { ukuran: 12, tebal: true, warna: b.warna, rata: CENTER });
+    teks(fmt(b.nilai, 1), cx, dasar + 34, { mono: true, ukuran: 11, warna: C.ink2, rata: CENTER });
+  }
+  stroke(C.ink2);
+  strokeWeight(1);
+  line(x0, dasar + 0.5, x0 + w, dasar + 0.5);
 
-  // Label Judul Grafik & Legenda
-  noStroke();
-  fill(226, 232, 240);
-  textSize(11);
-  textStyle(BOLD);
-  textAlign(LEFT, TOP);
-  text("Grafik Energi vs Waktu (E vs t)", gx + 8, gy + 8);
+  // --- Grafik E terhadap t ---
+  renderGrafikEnergi(x0, 268, w, 128, refTotal);
 
-  // Legenda Warna
-  let legX = gx + gw - 170;
-  let legY = gy + 8;
-  textSize(10);
-  fill(16, 185, 129); text("● Ep", legX, legY);
-  fill(14, 165, 233); text("● Ek", legX + 40, legY);
-  fill(245, 158, 11); text("● Em", legX + 80, legY);
-  if (muGesek > 0) {
-    fill(244, 63, 94); text("● Ed", legX + 120, legY);
+  // --- Pembacaan ---
+  stroke(C.rule);
+  strokeWeight(1);
+  line(x0, 446.5, x0 + w, 446.5);
+
+  let dE = Em - EmAwal;
+  let kolom = [
+    ['h', fmt(ketinggianSaatIni(), 2), 'm'],
+    ['v', fmt(kelajuanSaatIni(), 2), 'm/s'],
+    ['t', fmt(waktuSimulasi, 2), 's'],
+    ['ΔEm', (dE > 0.005 ? '+' : '') + fmt(dE, 2), 'J']
+  ];
+  let kw = w / 4;
+  for (let i = 0; i < kolom.length; i++) {
+    let kx = x0 + kw * i;
+    teks(kolom[i][0], kx, 466, { ukuran: 10, warna: C.ink3 });
+    teks(kolom[i][1], kx, 484, { mono: true, ukuran: 13, warna: C.ink });
+    teks(kolom[i][2], kx + textWidth(kolom[i][1]) + 4, 484, { ukuran: 10, warna: C.ink3 });
   }
 
-  // Plot Kurva Menggunakan beginShape() dan vertex()
-  if (riwayatEnergi.length > 1) {
-    let n = riwayatEnergi.length;
-    let safeMax = Math.max(maxEnergy, 1.0);
+  let ket;
+  if (muGesek <= 0.0001) {
+    let persen = EmAwal > 0 ? Math.abs(dE) / EmAwal * 100 : 0;
+    ket = 'μ = 0 · Em menyimpang ' + fmt(persen, 2) + ' % dari E₀ (galat numerik)';
+  } else {
+    let persen = EmAwal > 0 ? Edisip / EmAwal * 100 : 0;
+    ket = 'μ = ' + fmt(muGesek, 2) + ' · ' + fmt(persen, 1) + ' % energi awal jadi kalor';
+  }
+  teks(ket, x0, 506, { ukuran: 10, warna: C.ink2 });
+}
 
-    // 1. Kurva Ep (Hijau)
+function renderGrafikEnergi(gx, gy, gw, gh, maxEnergy) {
+  let tampilQ = muGesek > 0;
+
+  teks('E terhadap t', gx, gy, { ukuran: 13, tebal: true });
+
+  // legenda
+  let leg = [['Ep', C.ep, false], ['Ek', C.ek, false], ['Em', C.em, false]];
+  if (tampilQ) leg.push(['Q', C.q, true]);
+  let lx = gx + gw;
+  for (let i = leg.length - 1; i >= 0; i--) {
+    aturFont(11, false, false);
+    let tw = textWidth(leg[i][0]);
+    lx -= tw;
+    teks(leg[i][0], lx, gy, { ukuran: 11, warna: C.ink2 });
+    stroke(leg[i][1]);
+    strokeWeight(2);
+    if (leg[i][2]) drawingContext.setLineDash([3, 2]);
+    line(lx - 18, gy - 4, lx - 5, gy - 4);
+    drawingContext.setLineDash([]);
+    lx -= 30;
+  }
+
+  let px0 = gx + 32;
+  let px1 = gx + gw;
+  let pyTop = gy + 18;
+  let pyBot = gy + gh;
+  let safeMax = Math.max(maxEnergy, 1.0);
+
+  // sumbu & grid
+  stroke(C.grid);
+  strokeWeight(1);
+  line(px0, pyTop + 0.5, px1, pyTop + 0.5);
+  line(px0, (pyTop + pyBot) / 2, px1, (pyTop + pyBot) / 2);
+  stroke(C.ink3);
+  line(px0 + 0.5, pyTop, px0 + 0.5, pyBot);
+  line(px0, pyBot + 0.5, px1, pyBot + 0.5);
+
+  teks(fmt(safeMax, 0), px0 - 6, pyTop, { mono: true, ukuran: 10, warna: C.ink3, rata: RIGHT, vrata: CENTER });
+  teks('0', px0 - 6, pyBot, { mono: true, ukuran: 10, warna: C.ink3, rata: RIGHT, vrata: CENTER });
+
+  let n = riwayatEnergi.length;
+  let tAwal = n > 0 ? riwayatEnergi[0].t : 0;
+  let tAkhir = n > 0 ? riwayatEnergi[n - 1].t : 0;
+  teks(fmt(tAwal, 1), px0, pyBot + 16, { mono: true, ukuran: 10, warna: C.ink3 });
+  teks(fmt(tAkhir, 1) + ' s', px1, pyBot + 16, { mono: true, ukuran: 10, warna: C.ink3, rata: RIGHT });
+
+  if (n < 2) {
+    teks('Tekan Jalankan untuk merekam', (px0 + px1) / 2, (pyTop + pyBot) / 2 - 10,
+      { ukuran: 11, warna: C.ink3, rata: CENTER, vrata: CENTER });
+    return;
+  }
+
+  function kurva(kunci, warna, tebal, putus) {
     noFill();
-    stroke(16, 185, 129);
-    strokeWeight(1.8);
+    stroke(warna);
+    strokeWeight(tebal);
+    if (putus) drawingContext.setLineDash([4, 3]);
     beginShape();
     for (let i = 0; i < n; i++) {
-      let vx = map(i, 0, MAX_RIWAYAT, gx + 6, gx + gw - 6);
-      let vy = map(riwayatEnergi[i].Ep, 0, safeMax, gy + gh - 8, gy + 28);
-      vertex(vx, constrain(vy, gy + 24, gy + gh - 6));
+      let vx = map(i, 0, MAX_RIWAYAT - 1, px0 + 2, px1);
+      let vy = map(riwayatEnergi[i][kunci], 0, safeMax, pyBot - 1, pyTop + 1);
+      vertex(vx, constrain(vy, pyTop, pyBot));
     }
     endShape();
-
-    // 2. Kurva Ek (Biru)
-    stroke(14, 165, 233);
-    strokeWeight(1.8);
-    beginShape();
-    for (let i = 0; i < n; i++) {
-      let vx = map(i, 0, MAX_RIWAYAT, gx + 6, gx + gw - 6);
-      let vy = map(riwayatEnergi[i].Ek, 0, safeMax, gy + gh - 8, gy + 28);
-      vertex(vx, constrain(vy, gy + 24, gy + gh - 6));
-    }
-    endShape();
-
-    // 3. Kurva Edisip (Merah) jika ada
-    if (muGesek > 0) {
-      stroke(244, 63, 94);
-      strokeWeight(1.5);
-      beginShape();
-      for (let i = 0; i < n; i++) {
-        let vx = map(i, 0, MAX_RIWAYAT, gx + 6, gx + gw - 6);
-        let vy = map(riwayatEnergi[i].Edisip, 0, safeMax, gy + gh - 8, gy + 28);
-        vertex(vx, constrain(vy, gy + 24, gy + gh - 6));
-      }
-      endShape();
-    }
-
-    // 4. Kurva Em (Emas) -> Konservasi Energi Menghasilkan Garis Lurus Horizontal!
-    stroke(245, 158, 11);
-    strokeWeight(2.2);
-    beginShape();
-    for (let i = 0; i < n; i++) {
-      let vx = map(i, 0, MAX_RIWAYAT, gx + 6, gx + gw - 6);
-      let vy = map(riwayatEnergi[i].Em, 0, safeMax, gy + gh - 8, gy + 28);
-      vertex(vx, constrain(vy, gy + 24, gy + gh - 6));
-    }
-    endShape();
+    drawingContext.setLineDash([]);
   }
+
+  kurva('Ep', C.ep, 1.75, false);
+  kurva('Ek', C.ek, 1.75, false);
+  if (tampilQ) kurva('Edisip', C.q, 1.5, true);
+  kurva('Em', C.em, 2.25, false);
 }
 
 // ============================================================================
-// 7. INISIALISASI & MANAJEMEN KOMPONEN KONTROL ANTARMUKA (UI DOM)
+// 7. KOMPONEN KONTROL (p5 DOM: createSelect, createButton, createSlider, ...)
+// Tampilan diatur lewat kelas CSS di index.html.
 // ============================================================================
+function buatField(parent, id, teksLabel) {
+  let f = createDiv().parent(parent).addClass('field');
+  let head = createDiv().parent(f).addClass('field-head');
+  let lbl = createElement('label', teksLabel).parent(head).attribute('for', id);
+  let out = createElement('output').parent(head).attribute('for', id);
+  return { field: f, label: lbl, out: out };
+}
 
 function inisialisasiUI() {
-  // Induk container kontrol jika ada di index.html
-  let parentPanel = select('#control-panel');
+  let panel = createDiv().id('sim-controls');
+  if (select('#control-panel')) panel.parent('control-panel');
+  else panel.position(20, 540);
 
-  // Wadah utama panel kontrol dibuat rapi dengan CSS styling
-  let panel = createDiv();
-  panel.id('sim-controls-wrapper');
-  if (parentPanel) {
-    panel.parent('control-panel');
-  } else {
-    panel.position(20, 540);
-  }
+  // Baris aksi
+  let bar = createDiv().parent(panel).addClass('toolbar');
 
-  // Baris 1: Pilihan Model Sistem Fisis & Tombol Aksi
-  let row1 = createDiv().parent(panel).style('display', 'flex').style('gap', '12px').style('align-items', 'center').style('margin-bottom', '12px');
-
-  createDiv('<b>Pilih Sistem Fisis:</b>').parent(row1).style('font-size', '13px');
-  selectModel = createSelect().parent(row1);
-  selectModel.option('1. Lintasan Melengkung (Roller Coaster)', 'roller_coaster');
-  selectModel.option('2. Gerak Jatuh Bebas & Pantulan', 'jatuh_bebas');
-  selectModel.option('3. Ayunan Bandul Sederhana', 'bandul');
+  let fModel = createDiv().parent(bar).addClass('model-picker');
+  createElement('label', 'Sistem').parent(fModel).attribute('for', 'pilih-model');
+  selectModel = createSelect().parent(fModel).id('pilih-model');
+  selectModel.option('Lintasan melengkung', 'roller_coaster');
+  selectModel.option('Jatuh bebas & pantulan', 'jatuh_bebas');
+  selectModel.option('Bandul sederhana', 'bandul');
   selectModel.selected('roller_coaster');
   selectModel.changed(gantiModelSimulasi);
-  selectModel.style('padding', '6px 10px').style('border-radius', '6px').style('background', '#ffffff').style('border', '1px solid #cbd5e1');
 
-  tombolMulai = createButton('▶ Jalankan / Jeda').parent(row1);
-  tombolMulai.style('padding', '7px 14px').style('background', '#2563eb').style('color', '#ffffff').style('font-weight', 'bold').style('border', 'none').style('border-radius', '6px').style('cursor', 'pointer');
-  tombolMulai.mousePressed(toggleSimulasi);
+  let aksi = createDiv().parent(bar).addClass('actions');
+  tombolMulai = createButton('').parent(aksi).addClass('btn btn-primary');
+  tombolMulai.mouseClicked(toggleSimulasi);
 
-  tombolReset = createButton('↺ Reset Posisi').parent(row1);
-  tombolReset.style('padding', '7px 14px').style('background', '#475569').style('color', '#ffffff').style('border', 'none').style('border-radius', '6px').style('cursor', 'pointer');
-  tombolReset.mousePressed(resetSimulasi);
+  tombolReset = createButton('Reset <kbd>R</kbd>').parent(aksi).addClass('btn');
+  tombolReset.attribute('title', 'Kembalikan benda ke posisi awal');
+  tombolReset.mouseClicked(resetSimulasi);
 
-  tombolSlow = createButton('🐢 Slow-Mo (0.4x)').parent(row1);
-  tombolSlow.style('padding', '7px 14px').style('background', '#0f766e').style('color', '#ffffff').style('border', 'none').style('border-radius', '6px').style('cursor', 'pointer');
-  tombolSlow.mousePressed(() => {
+  tombolSlow = createButton('Lambat 0,4×').parent(aksi).addClass('btn');
+  tombolSlow.attribute('aria-pressed', 'false');
+  tombolSlow.mouseClicked(() => {
     isSlowMotion = !isSlowMotion;
-    tombolSlow.style('background', isSlowMotion ? '#0d9488' : '#0f766e');
-    tombolSlow.html(isSlowMotion ? '⚡ Kecepatan Normal (1x)' : '🐢 Slow-Mo (0.4x)');
+    tombolSlow.attribute('aria-pressed', String(isSlowMotion));
   });
 
-  // Baris 2: Parameter Slider
-  let row2 = createDiv().parent(panel).style('display', 'grid').style('grid-template-columns', 'repeat(auto-fit, minmax(200px, 1fr))').style('gap', '16px').style('margin-bottom', '12px').style('background', '#f8fafc').style('padding', '12px').style('border-radius', '8px').style('border', '1px solid #e2e8f0');
+  tombolSimpan = createButton('Simpan PNG <kbd>S</kbd>').parent(aksi).addClass('btn btn-ghost');
+  tombolSimpan.mouseClicked(simpanGambar);
 
-  // Slider Massa (m)
-  let boxMassa = createDiv().parent(row2);
-  boxMassa.html('<span>Massa Benda (m): </span>');
-  labelMassaVal = createSpan('2.0 kg').parent(boxMassa).style('font-weight', 'bold').style('color', '#2563eb');
-  sliderMassa = createSlider(0.5, 5.0, 2.0, 0.1).parent(boxMassa).style('width', '100%');
+  // Parameter
+  let params = createDiv().parent(panel).addClass('params');
+
+  let fm = buatField(params, 'sl-massa', 'Massa m');
+  outMassa = fm.out;
+  sliderMassa = createSlider(0.5, 5.0, 2.0, 0.1).parent(fm.field).id('sl-massa');
   sliderMassa.input(updateParameterSlider);
 
-  // Slider Gravitasi (g)
-  let boxGrav = createDiv().parent(row2);
-  boxGrav.html('<span>Gravitasi (g): </span>');
-  labelGravitasiVal = createSpan('9.8 m/s²').parent(boxGrav).style('font-weight', 'bold').style('color', '#2563eb');
-  sliderGravitasi = createSlider(1.0, 25.0, 9.8, 0.2).parent(boxGrav).style('width', '100%');
+  let fg = buatField(params, 'sl-gravitasi', 'Gravitasi g');
+  outGravitasi = fg.out;
+  sliderGravitasi = createSlider(1.0, 25.0, 9.8, 0.2).parent(fg.field).id('sl-gravitasi');
   sliderGravitasi.input(updateParameterSlider);
+  let preset = createDiv().parent(fg.field).addClass('presets');
+  [['Bulan', 1.6], ['Bumi', 9.8], ['Jupiter', 24.8]].forEach(([nama, nilai]) => {
+    let b = createButton(nama).parent(preset).addClass('chip');
+    b.attribute('title', 'g = ' + fmt(nilai, 1) + ' m/s²');
+    b.mouseClicked(() => {
+      sliderGravitasi.value(nilai);
+      updateParameterSlider();
+    });
+    tombolPresetG.push({ el: b, nilai: nilai });
+  });
 
-  // Slider Gesekan / Redaman (mu)
-  let boxGesek = createDiv().parent(row2);
-  boxGesek.html('<span>Redaman / Gesekan (μ): </span>');
-  labelGesekanVal = createSpan('0.00 (Murni)').parent(boxGesek).style('font-weight', 'bold').style('color', '#16a34a');
-  sliderGesekan = createSlider(0.00, 0.20, 0.00, 0.01).parent(boxGesek).style('width', '100%');
+  let fmu = buatField(params, 'sl-gesekan', 'Redaman μ');
+  outGesekan = fmu.out;
+  sliderGesekan = createSlider(0.00, 0.20, 0.00, 0.01).parent(fmu.field).id('sl-gesekan');
   sliderGesekan.input(updateParameterSlider);
 
-  // Slider Ketinggian Awal (h0)
-  let boxH0 = createDiv().parent(row2);
-  boxH0.html('<span>Posisi / Simpangan Awal: </span>');
-  labelKetinggianVal = createSpan('Tinggi').parent(boxH0).style('font-weight', 'bold').style('color', '#2563eb');
-  sliderKetinggian = createSlider(10, 90, 45, 1).parent(boxH0).style('width', '100%');
+  let fp = buatField(params, 'sl-posisi', 'Posisi awal');
+  labelPosisi = fp.label;
+  outPosisi = fp.out;
+  sliderKetinggian = createSlider(0, 1, 0.5, 0.01).parent(fp.field).id('sl-posisi');
   sliderKetinggian.input(updatePosisiAwalSlider);
 
-  // Baris 3: Kotak Centang (Checkboxes) Opsi Tampilan
-  let row3 = createDiv().parent(panel).style('display', 'flex').style('gap', '20px').style('font-size', '13px');
-  checkboxVektor = createCheckbox(' Tampilkan Vektor Kecepatan (v)', true).parent(row3);
-  checkboxJejak = createCheckbox(' Tampilkan Jejak Lintasan (Trail)', true).parent(row3);
-  checkboxGrid = createCheckbox(' Tampilkan Garis Bantu / Grid', true).parent(row3);
+  // Opsi tampilan
+  let opsi = createDiv().parent(panel).addClass('toggles');
+  createSpan('Tampilkan').parent(opsi).addClass('toggles-label');
+  checkboxVektor = createCheckbox('Vektor v', true).parent(opsi);
+  checkboxJejak = createCheckbox('Jejak', true).parent(opsi);
+  checkboxGrid = createCheckbox('Grid', true).parent(opsi);
+
+  aturSliderPosisi();
+  updateTeksUI();
+  updateTombolMulai();
 }
 
-function updateParameterSlider() {
-  massa = sliderMassa.value();
-  g = sliderGravitasi.value();
-  muGesek = sliderGesekan.value();
-}
-
-function updatePosisiAwalSlider() {
-  let val = sliderKetinggian.value();
+// Rentang slider posisi berbeda per model
+function aturSliderPosisi() {
+  let el = sliderKetinggian.elt;
   if (modelAktif === 'roller_coaster') {
-    rc_u = map(val, 10, 90, 0.08, 0.92);
-    rc_v = 0.0;
+    labelPosisi.html('Posisi awal');
+    el.min = 0.05; el.max = 0.95; el.step = 0.01;
   } else if (modelAktif === 'jatuh_bebas') {
-    jb_h = map(val, 10, 90, 1.5, 9.0);
-    jb_v = 0.0;
-  } else if (modelAktif === 'bandul') {
-    bd_theta = map(val, 10, 90, 0.15, 1.25);
-    bd_omega = 0.0;
+    labelPosisi.html('Ketinggian awal');
+    el.min = 0.5; el.max = 9.5; el.step = 0.1;
+  } else {
+    labelPosisi.html('Simpangan awal');
+    el.min = -80; el.max = 80; el.step = 1;
   }
-  // Reset hitungan energi awal
+  el.value = posisiAwal[modelAktif];
+}
+
+function terapkanPosisiAwal() {
+  let p = posisiAwal[modelAktif];
+  if (modelAktif === 'roller_coaster') { rc_u = p; rc_v = 0.0; }
+  else if (modelAktif === 'jatuh_bebas') { jb_h = p; jb_v = 0.0; }
+  else { bd_theta = radians(p); bd_omega = 0.0; }
+}
+
+function aturUlangAcuanEnergi() {
   hitungEnergiStatis();
+  Edisip = 0.0;
   EmAwal = Em;
   riwayatEnergi = [];
   jejakObjek = [];
 }
 
+function updateParameterSlider() {
+  let massaBaru = sliderMassa.value();
+  let gBaru = sliderGravitasi.value();
+  let acuanBerubah = massaBaru !== massa || gBaru !== g;
+  massa = massaBaru;
+  g = gBaru;
+  muGesek = sliderGesekan.value();
+  // m atau g berubah: Em ikut berubah, jadi acuan E0 dan grafik dimulai ulang
+  if (acuanBerubah) aturUlangAcuanEnergi();
+  updateTeksUI();
+}
+
+function updatePosisiAwalSlider() {
+  posisiAwal[modelAktif] = Number(sliderKetinggian.value());
+  terapkanPosisiAwal();
+  waktuSimulasi = 0.0;
+  aturUlangAcuanEnergi();
+  updateTeksUI();
+}
+
 function updateTeksUI() {
-  if (labelMassaVal) labelMassaVal.html(nf(sliderMassa.value(), 1, 1) + ' kg');
-  if (labelGravitasiVal) labelGravitasiVal.html(nf(sliderGravitasi.value(), 1, 1) + ' m/s²');
-  if (labelGesekanVal) {
-    let mu = sliderGesekan.value();
-    if (mu <= 0.0001) {
-      labelGesekanVal.html('0.00 (Konservatif Murni)').style('color', '#16a34a');
-    } else {
-      labelGesekanVal.html(nf(mu, 1, 2) + ' (Disipatif)').style('color', '#dc2626');
-    }
-  }
+  outMassa.html(fmt(sliderMassa.value(), 1) + ' kg');
+  outGravitasi.html(fmt(sliderGravitasi.value(), 1) + ' m/s²');
+
+  let mu = sliderGesekan.value();
+  outGesekan.html(mu <= 0.0001 ? '0 · konservatif' : fmt(mu, 2) + ' · disipatif');
+  if (mu > 0.0001) outGesekan.addClass('is-lossy');
+  else outGesekan.removeClass('is-lossy');
+
+  let p = posisiAwal[modelAktif];
+  if (modelAktif === 'roller_coaster') outPosisi.html('h₀ = ' + fmt(rc_getHeight(p), 2) + ' m');
+  else if (modelAktif === 'jatuh_bebas') outPosisi.html('h₀ = ' + fmt(p, 1) + ' m');
+  else outPosisi.html('θ₀ = ' + fmt(p, 0) + '°');
+
+  tombolPresetG.forEach(({ el, nilai }) => {
+    el.attribute('aria-pressed', String(Math.abs(g - nilai) < 0.05));
+  });
+}
+
+function updateTombolMulai() {
+  if (!tombolMulai) return;
+  tombolMulai.html((statusJalan ? 'Jeda' : 'Jalankan') + ' <kbd>Spasi</kbd>');
+  tombolMulai.attribute('aria-pressed', String(statusJalan));
 }
 
 function toggleSimulasi() {
   statusJalan = !statusJalan;
-  if (statusJalan) {
-    tombolMulai.html('⏸ Jeda Simulasi').style('background', '#e11d48');
-  } else {
-    tombolMulai.html('▶ Jalankan').style('background', '#2563eb');
-  }
+  updateTombolMulai();
 }
 
 function gantiModelSimulasi() {
   modelAktif = selectModel.value();
+  aturSliderPosisi();
   resetSimulasi();
 }
 
 function resetSimulasi() {
   waktuSimulasi = 0.0;
-  jejakObjek = [];
-  riwayatEnergi = [];
+  massa = sliderMassa ? sliderMassa.value() : massa;
+  g = sliderGravitasi ? sliderGravitasi.value() : g;
+  muGesek = sliderGesekan ? sliderGesekan.value() : muGesek;
 
-  massa = sliderMassa ? sliderMassa.value() : 2.0;
-  g = sliderGravitasi ? sliderGravitasi.value() : 9.8;
-  muGesek = sliderGesekan ? sliderGesekan.value() : 0.00;
+  terapkanPosisiAwal();
+  aturUlangAcuanEnergi();
 
-  if (modelAktif === 'roller_coaster') {
-    rc_u = 0.12;
-    rc_v = 0.0;
-  } else if (modelAktif === 'jatuh_bebas') {
-    jb_h = 7.5;
-    jb_v = 0.0;
-  } else if (modelAktif === 'bandul') {
-    bd_theta = 0.85;
-    bd_omega = 0.0;
-  }
+  statusJalan = false;
+  updateTombolMulai();
+  if (outPosisi) updateTeksUI();
+}
 
-  hitungEnergiStatis();
-  EmAwal = Em;
-
-  if (tombolMulai) {
-    statusJalan = false;
-    tombolMulai.html('▶ Jalankan').style('background', '#2563eb');
-  }
+function simpanGambar() {
+  saveCanvas('simulasi_konservasi_energi', 'png');
 }
 
 // ============================================================================
-// 8. INTERAKSI MOUSE (Drag & Drop Posisi Awal Objek)
+// 8. INTERAKSI MOUSE / SENTUH (seret bola untuk mengatur posisi awal)
 // ============================================================================
-
 function mousePressed() {
-  if (mouseX < 0 || mouseX > 600 || mouseY < 0 || mouseY > height) return;
+  if (mouseX < 0 || mouseX > LEBAR_SIM || mouseY < 0 || mouseY > height) return;
 
-  let bx, by, r;
-  if (modelAktif === 'roller_coaster') {
-    bx = RC_X_START + rc_u * (RC_X_END - RC_X_START);
-    by = yTanah - rc_getHeight(rc_u) * skalaMeter;
-    r = map(massa, 0.5, 5.0, 12, 22);
-  } else if (modelAktif === 'jatuh_bebas') {
-    bx = jb_x;
-    by = yTanah - jb_h * skalaMeter;
-    r = map(massa, 0.5, 5.0, 14, 26);
-  } else if (modelAktif === 'bandul') {
-    bx = bd_pivotX + bd_L * skalaMeter * Math.sin(bd_theta);
-    by = bd_pivotY + bd_L * skalaMeter * Math.cos(bd_theta);
-    r = map(massa, 0.5, 5.0, 14, 26);
-  }
-
-  if (dist(mouseX, mouseY, bx, by) < r + 15) {
+  let b = posisiBola();
+  if (dist(mouseX, mouseY, b.x, b.y) < b.r + 14) {
     isDragging = true;
     statusJalan = false;
-    if (tombolMulai) tombolMulai.html('▶ Jalankan').style('background', '#2563eb');
+    updateTombolMulai();
+    return false; // cegah gulir halaman saat menyeret di layar sentuh
   }
 }
 
@@ -1135,39 +925,50 @@ function mouseDragged() {
   if (!isDragging) return;
 
   if (modelAktif === 'roller_coaster') {
-    rc_u = constrain((mouseX - RC_X_START) / (RC_X_END - RC_X_START), 0.05, 0.95);
-    rc_v = 0.0;
+    posisiAwal.roller_coaster = constrain((mouseX - RC_X_START) / (RC_X_END - RC_X_START), 0.05, 0.95);
   } else if (modelAktif === 'jatuh_bebas') {
-    jb_h = constrain((yTanah - mouseY) / skalaMeter, 0.2, 9.5);
-    jb_v = 0.0;
-  } else if (modelAktif === 'bandul') {
-    let dx = mouseX - bd_pivotX;
-    let dy = mouseY - bd_pivotY;
-    bd_theta = constrain(Math.atan2(dx, dy), -1.4, 1.4);
-    bd_omega = 0.0;
+    let r = radiusBola();
+    posisiAwal.jatuh_bebas = Math.round(constrain((yTanah - mouseY - r) / skalaMeter, 0.5, 9.5) * 10) / 10;
+  } else {
+    let sudut = degrees(Math.atan2(mouseX - bd_pivotX, mouseY - bd_pivotY));
+    posisiAwal.bandul = Math.round(constrain(sudut, -80, 80));
   }
 
-  hitungEnergiStatis();
-  EmAwal = Em;
-  jejakObjek = [];
-  riwayatEnergi = [];
+  sliderKetinggian.value(posisiAwal[modelAktif]);
+  terapkanPosisiAwal();
+  waktuSimulasi = 0.0;
+  aturUlangAcuanEnergi();
+  updateTeksUI();
+  return false;
 }
 
 function mouseReleased() {
   if (isDragging) {
     isDragging = false;
-    hitungEnergiStatis();
-    EmAwal = Em;
+    aturUlangAcuanEnergi();
   }
 }
 
-// Pintasan Keyboard (Shortcut Keys)
+// ============================================================================
+// 9. PINTASAN KEYBOARD
+// ============================================================================
 function keyPressed() {
-  if (key === ' ' || key === 'Space') {
+  let el = document.activeElement;
+  let tag = el ? el.tagName : '';
+  if (tag === 'SELECT' || tag === 'TEXTAREA') return;
+
+  if (key === ' ') {
+    // Spasi pada tombol/checkbox yang sedang fokus sudah ditangani browser
+    if (tag === 'BUTTON' || (tag === 'INPUT' && el.type === 'checkbox')) return;
     toggleSimulasi();
-  } else if (key === 'r' || key === 'R') {
+    return false;
+  }
+  if (key === 'r' || key === 'R') {
     resetSimulasi();
-  } else if (key === 's' || key === 'S') {
-    saveCanvas('simulasi_konservasi_energi_p5js', 'png');
+    return false;
+  }
+  if (key === 's' || key === 'S') {
+    simpanGambar();
+    return false;
   }
 }

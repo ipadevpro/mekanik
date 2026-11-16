@@ -3,233 +3,347 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Simulasi Konservasi Energi Mekanik - Sains Komputasi RPL</title>
-  
-  <!-- Pustaka p5.js via CDN Resmi (Sesuai Modul Bab II Cara 2) -->
+  <title>Konservasi Energi Mekanik</title>
+  <meta name="description" content="Laboratorium virtual konservasi energi mekanik dengan integrasi numerik Euler-Cromer di p5.js.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- p5.js via CDN (Modul Bab II, Cara 2) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
-  
+
   <style>
     :root {
-      --primary: #2563eb;
-      --primary-dark: #1d4ed8;
-      --bg-page: #0f172a;
-      --card-bg: #ffffff;
-      --text-main: #1e293b;
-      --text-muted: #64748b;
-      --border-color: #e2e8f0;
+      color-scheme: light;
+      --paper: #f4f2ec;
+      --surface: #fffefb;
+      --rule: #d6d2c7;
+      --rule-soft: #e7e4dc;
+      --ink: #1d1f21;
+      --ink-2: #55585c;
+      --ink-3: #8a8d91;
+      --ep: #2c64b0;
+      --ek: #d67018;
+      --q: #b23a48;
+      --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+      --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
     }
 
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+    * { box-sizing: border-box; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: #f1f5f9;
-      color: var(--text-main);
-      padding: 24px;
-      line-height: 1.5;
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 15px/1.55 var(--sans);
+      -webkit-font-smoothing: antialiased;
     }
 
-    .container {
-      max-width: 1060px;
+    .page {
+      max-width: 1012px;
       margin: 0 auto;
+      padding: 40px 16px 56px;
     }
 
-    header {
-      background: #ffffff;
-      padding: 24px 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-      margin-bottom: 20px;
-      border-left: 6px solid var(--primary);
+    /* ---------- Kepala ---------- */
+    header { margin-bottom: 24px; }
+
+    .eyebrow {
+      margin: 0 0 6px;
+      font-size: 13px;
+      color: var(--ink-3);
     }
 
-    .badge-course {
-      display: inline-block;
-      background: #eff6ff;
-      color: #1d4ed8;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 4px 10px;
-      border-radius: 20px;
-      margin-bottom: 8px;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+      font-weight: 600;
+      letter-spacing: -0.015em;
     }
 
-    header h1 {
-      font-size: 24px;
-      font-weight: 800;
-      color: #0f172a;
-      margin-bottom: 6px;
+    .lede {
+      margin: 8px 0 0;
+      max-width: 62ch;
+      color: var(--ink-2);
     }
 
-    header p {
-      font-size: 14px;
-      color: var(--text-muted);
-    }
-
-    .simulation-wrapper {
-      background: #ffffff;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.07);
-      margin-bottom: 24px;
-      border: 1px solid var(--border-color);
-    }
-
-    #canvas-container {
-      display: flex;
-      justify-content: center;
-      background: #0f172a;
-      border-radius: 8px;
+    /* ---------- Lab ---------- */
+    .lab {
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 6px;
       overflow: hidden;
-      margin-bottom: 16px;
-      border: 1px solid #334155;
     }
 
-    #control-panel {
-      padding: 10px 0;
+    #canvas-container { line-height: 0; border-bottom: 1px solid var(--rule); }
+
+    #canvas-container canvas {
+      display: block;
+      width: 100% !important;
+      height: auto !important;
     }
 
-    /* Kartu Penjelasan Teori & Sains Komputasi */
-    .theory-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 18px;
-      margin-bottom: 24px;
-    }
+    .scroll-hint { display: none; }
 
-    .theory-card {
-      background: #ffffff;
-      border-radius: 10px;
-      padding: 20px;
-      border: 1px solid var(--border-color);
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-    }
+    #control-panel { padding: 16px 20px 18px; }
 
-    .theory-card h3 {
-      font-size: 16px;
-      font-weight: 700;
-      color: #0f172a;
-      margin-bottom: 10px;
+    .toolbar {
       display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--rule-soft);
+    }
+
+    .model-picker { display: flex; align-items: center; gap: 10px; }
+    .model-picker label { font-size: 13px; color: var(--ink-2); }
+
+    select {
+      font: inherit;
+      font-size: 14px;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 7px 30px 7px 10px;
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--ink-2) 50%), linear-gradient(135deg, var(--ink-2) 50%, transparent 50%);
+      background-position: right 14px top 50%, right 9px top 50%;
+      background-size: 5px 5px;
+      background-repeat: no-repeat;
+      cursor: pointer;
+    }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    .btn {
+      font: inherit;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink);
+      background: var(--surface);
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+      padding: 7px 12px;
+      cursor: pointer;
+      display: inline-flex;
       align-items: center;
       gap: 8px;
+      transition: background-color 120ms, border-color 120ms;
+    }
+    .btn:hover { background: var(--paper); border-color: var(--ink-3); }
+
+    .btn-primary {
+      min-width: 132px;
+      justify-content: center;
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--surface);
+    }
+    .btn-primary:hover { background: #3a3d40; border-color: #3a3d40; }
+
+    .btn-ghost { border-color: transparent; color: var(--ink-2); }
+
+    .btn[aria-pressed="true"]:not(.btn-primary) {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--surface);
     }
 
-    .formula-box {
-      background: #f8fafc;
-      padding: 10px 14px;
-      border-radius: 6px;
-      border-left: 3px solid #3b82f6;
-      font-family: "Courier New", Courier, monospace;
-      font-size: 13px;
-      margin: 10px 0;
-      color: #1e293b;
+    kbd {
+      font: 11px/1 var(--mono);
+      padding: 3px 5px;
+      border-radius: 3px;
+      border: 1px solid currentColor;
+      opacity: 0.55;
     }
 
-    .theory-card ul {
-      padding-left: 20px;
-      font-size: 13px;
-      color: #475569;
+    :focus-visible { outline: 2px solid var(--ep); outline-offset: 2px; }
+
+    .params {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 18px 28px;
+      padding: 16px 0;
+      border-bottom: 1px solid var(--rule-soft);
     }
 
-    .theory-card li {
+    .field-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
       margin-bottom: 6px;
     }
+    .field-head label { font-size: 13px; color: var(--ink-2); }
+    .field-head output {
+      font: 500 13px var(--sans);
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .field-head output.is-lossy { color: var(--q); }
+
+    input[type="range"] {
+      width: 100%;
+      margin: 4px 0;
+      accent-color: var(--ink);
+      cursor: pointer;
+    }
+
+    .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+    .chip {
+      font: 12px var(--sans);
+      color: var(--ink-2);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      padding: 2px 7px;
+      cursor: pointer;
+    }
+    .chip:hover { border-color: var(--ink-3); color: var(--ink); }
+    .chip[aria-pressed="true"] { border-color: var(--ink); color: var(--ink); }
+
+    .toggles {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px 20px;
+      padding-top: 14px;
+      font-size: 14px;
+    }
+    .toggles-label { font-size: 13px; color: var(--ink-3); }
+    .toggles label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+    .toggles input { margin: 0; accent-color: var(--ink); }
+
+    /* ---------- Catatan ---------- */
+    .notes {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 32px;
+      margin-top: 40px;
+    }
+
+    .notes section { border-top: 1px solid var(--ink); padding-top: 14px; }
+
+    .notes h2 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .notes p, .notes li { font-size: 14px; color: var(--ink-2); }
+    .notes p { margin: 0 0 10px; }
+    .notes ul { margin: 0; padding-left: 18px; }
+    .notes li { margin-bottom: 6px; }
+    .notes strong { color: var(--ink); font-weight: 500; }
+
+    .formula {
+      margin: 12px 0;
+      font: 14px/1.7 var(--mono);
+      color: var(--ink);
+    }
+
+    .key { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px; }
+    .key dt { color: var(--ink); }
+    .key dd { margin: 0; color: var(--ink-2); }
+
+    .sw { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
 
     footer {
-      text-align: center;
-      font-size: 12px;
-      color: #94a3b8;
-      padding: 16px 0;
+      margin-top: 48px;
+      padding-top: 14px;
+      border-top: 1px solid var(--rule);
+      font-size: 13px;
+      color: var(--ink-3);
+    }
+
+    @media (max-width: 640px) {
+      .page { padding-top: 24px; }
+      h1 { font-size: 24px; }
+      #control-panel { padding: 14px 16px 16px; }
+      .actions { width: 100%; }
+      .btn-primary { flex: 1 1 100%; }
+      .btn kbd { display: none; }
+
+      /* Kanvas tidak diperkecil di bawah 800px agar angka dasbor tetap terbaca */
+      #canvas-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      #canvas-container canvas { width: 800px !important; max-width: none; }
+      .scroll-hint {
+        display: block;
+        margin: 0;
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--ink-3);
+        border-bottom: 1px solid var(--rule-soft);
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .btn { transition: none; }
     }
   </style>
 </head>
 <body>
-
-  <div class="container">
-    <!-- Header Informasi Proyek & Mata Kuliah -->
+  <div class="page">
     <header>
-      <div class="badge-course">Mata Kuliah Sains Komputasi RPL (2026)</div>
-      <h1>Laboratorium Virtual: Konservasi Energi Mekanik</h1>
-      <p>
-        Dosen Pengampu: <b>Prof. Dr. rer. nat. Yudi Rosandi</b> & <b>Dr. Budi Adiperdana</b><br>
-        Implementasi Pemodelan Numerik Waktu Diskrit (Euler-Cromer) & Visualisasi Interaktif Berbasis <code>p5.js</code>
-      </p>
+      <p class="eyebrow">Sains Komputasi RPL 2026 · Prof. Dr. rer. nat. Yudi Rosandi &amp; Dr. Budi Adiperdana</p>
+      <h1>Konservasi energi mekanik</h1>
+      <p class="lede">Pilih sistem, atur parameter, lalu jalankan. Jika redaman μ = 0, garis Em di grafik harus tetap datar; sisa penyimpangannya adalah galat numerik.</p>
     </header>
 
-    <!-- Kontainer Kanvas & Kontrol Simulasi -->
-    <div class="simulation-wrapper">
-      <div id="canvas-container">
-        <!-- Kanvas p5.js otomatis disematkan di sini oleh sketch.js -->
-      </div>
-      <div id="control-panel">
-        <!-- Komponen UI interaktif (Select, Slider, Button, Checkbox) disematkan di sini -->
-      </div>
-    </div>
+    <main class="lab">
+      <div id="canvas-container"></div>
+      <p class="scroll-hint">Geser kanvas ke samping untuk melihat dasbor energi.</p>
+      <div id="control-panel"></div>
+    </main>
 
-    <!-- Referensi Konsep Teori & Sains Komputasi -->
-    <div class="theory-grid">
-      <div class="theory-card">
-        <h3>🔬 1. Landasan Fisika: Konservasi Energi</h3>
-        <p style="font-size: 13px; color: #475569;">
-          Hukum Kekekalan Energi Mekanik menyatakan bahwa pada sistem terisolasi di mana hanya bekerja gaya-gaya konservatif (seperti gravitasi), total energi mekanik akan bernilai <b>konstan</b>:
-        </p>
-        <div class="formula-box">
-          Em = Ep + Ek = Konstan<br>
-          Ep = m · g · h<br>
-          Ek = ½ · m · v²
+    <div class="notes">
+      <section>
+        <h2>Dasar fisika</h2>
+        <p>Pada sistem yang hanya dikenai gaya konservatif seperti gravitasi, energi mekanik tetap.</p>
+        <div class="formula">
+          Em = Ep + Ek = konstan<br>
+          Ep = m·g·h<br>
+          Ek = ½·m·v²
         </div>
         <ul>
-          <li><b>Titik Puncak:</b> Kecepatan minimum / nol (<i>Ek = 0</i>), seluruh energi berbentuk Potensial (<i>Ep = maks</i>).</li>
-          <li><b>Titik Lembah:</b> Ketinggian minimum (<i>Ep = min</i>), seluruh energi berubah menjadi Kinetik (<i>Ek = maks</i>).</li>
-          <li><b>Gaya Non-Konservatif:</b> Jika gesekan/redaman aktif (μ > 0), sebagian energi mekanik berubah menjadi kalor (<i>W_gesek</i>).</li>
+          <li>Di titik tertinggi v = 0, jadi seluruh energi berupa <span class="sw" style="background:var(--ep)"></span><strong>Ep</strong>.</li>
+          <li>Di titik terendah h minimum dan <span class="sw" style="background:var(--ek)"></span><strong>Ek</strong> maksimum.</li>
+          <li>Jika μ &gt; 0, sebagian energi berubah menjadi kalor <span class="sw" style="background:var(--q)"></span><strong>Q</strong>, dan Em turun sebesar Q.</li>
         </ul>
-      </div>
+      </section>
 
-      <div class="theory-card">
-        <h3>💻 2. Pendekatan Sains Komputasi (Numerik)</h3>
-        <p style="font-size: 13px; color: #475569;">
-          Sesuai silabus Sains Komputasi (3 Pilar Sains: <i>Teori, Simulasi, Eksperimen</i>), sistem kontinu didiskritisasi dengan selang waktu <b>Δt</b> menggunakan algoritma <b>Euler-Cromer</b> (Symplectic):
-        </p>
-        <div class="formula-box">
-          v(t + Δt) = v(t) + a(t) · Δt<br>
-          x(t + Δt) = x(t) + v(t + Δt) · Δt
+      <section>
+        <h2>Metode numerik</h2>
+        <p>Waktu didiskritisasi dengan langkah Δt = 0,02 s menggunakan Euler-Cromer: kecepatan diperbarui dulu, lalu posisi memakai kecepatan baru.</p>
+        <div class="formula">
+          v(t+Δt) = v(t) + a(t)·Δt<br>
+          x(t+Δt) = x(t) + v(t+Δt)·Δt
         </div>
-        <ul>
-          <li><b>Stabilitas Energi:</b> Berbeda dari Euler Standar yang menyebabkan artificial energy drift, Euler-Cromer memperbarui kecepatan terlebih dahulu sehingga kekekalan energi sangat stabil.</li>
-          <li><b>Multi-Model:</b> Mencakup 3 model fisis: <i>Roller Coaster (Track 2D)</i>, <i>Jatuh Bebas & Pantulan (GLBB 1D)</i>, dan <i>Ayunan Bandul Sederhana</i>.</li>
-        </ul>
-      </div>
+        <p>Euler biasa membuat energi terus bertambah. Euler-Cromer menjaga Em berosilasi kecil di sekitar E₀. Besarnya terlihat di baris ΔEm pada dasbor.</p>
+      </section>
 
-      <div class="theory-card">
-        <h3>🎮 3. Panduan Interaksi & Fitur</h3>
-        <ul>
-          <li><b>Klik & Geser Bola (Mouse Drag):</b> Anda dapat menarik bola langsung di layar kanvas untuk menentukan ketinggian awal atau simpangan awal secara bebas!</li>
-          <li><b>Pintasan Keyboard (Shortcuts):</b>
-            <ul>
-              <li><code>[Spasi]</code> : Jalankan / Jeda simulasi</li>
-              <li><code>[R]</code> : Reset simulasi ke kondisi awal</li>
-              <li><code>[S]</code> : Simpan tangkapan layar (PNG)</li>
-            </ul>
-          </li>
-          <li><b>Eksperimen Gravitasi:</b> Ubah slider gravitasi (g) untuk membandingkan gerak di Bumi (9.8), Bulan (1.6), atau Jupiter (24.8).</li>
-          <li><b>Eksperimen Friksi:</b> Setel slider μ = 0.00 untuk melihat garis kurva Em lurus sempurna (Konservasi 100%).</li>
-        </ul>
-      </div>
+      <section>
+        <h2>Cara pakai</h2>
+        <dl class="key">
+          <dt>Seret bola</dt><dd>atur posisi awal (simulasi dijeda)</dd>
+          <dt><kbd>Spasi</kbd></dt><dd>jalankan / jeda</dd>
+          <dt><kbd>R</kbd></dt><dd>kembali ke posisi awal</dd>
+          <dt><kbd>S</kbd></dt><dd>simpan kanvas sebagai PNG</dd>
+        </dl>
+        <p style="margin-top:12px">Coba bandingkan gravitasi Bulan, Bumi, dan Jupiter. Periode berubah, tetapi Em tetap datar selama μ = 0.</p>
+      </section>
     </div>
 
-    <footer>
-      Tugas Simulasi Fisika Sains Komputasi &copy; 2026 | Berbasis p5.js & Sains Komputasi RPL
-    </footer>
+    <footer>Tugas simulasi fisika, Sains Komputasi RPL 2026. Dibuat dengan p5.js.</footer>
   </div>
 
-  <!-- Menghubungkan File Logika Skrip p5.js -->
   <script src="sketch.js"></script>
 </body>
 </html>

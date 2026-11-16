@@ -15,8 +15,8 @@ Proyek simulasi laboratorium fisika virtual untuk mata kuliah **Sains Komputasi 
    - Anda **cukup menyalin (copy-paste)** seluruh isi kode dari file `sketch.js` saja ke dalam jendela editor, karena di p5.js Web Editor file `index.html` sudah otomatis disediakan di balik layar oleh platform.
 
 Oleh karena itu, di proyek ini sudah disiapkan **keduanya**:
-- [`index.html`](file:///Users/users/Documents/Project/p5js.energi/index.html) : Untuk menjalankan simulasi di browser laptop/lokal dengan tampilan antarmuka yang lengkap dan rapi.
-- [`sketch.js`](file:///Users/users/Documents/Project/p5js.energi/sketch.js) : Seluruh logika algoritma fisika, sains komputasi numerik, rendering kanvas, dan antarmuka kontrol.
+- [`index.html`](index.html) : Untuk menjalankan simulasi di browser laptop/lokal dengan tampilan antarmuka yang lengkap dan rapi.
+- [`sketch.js`](sketch.js) : Seluruh logika algoritma fisika, sains komputasi numerik, rendering kanvas, dan antarmuka kontrol.
 
 ---
 
@@ -43,26 +43,28 @@ Simulasi ini dirancang khusus mengikuti materi perkuliahan dan modul praktikum:
    - **Model 1: Lintasan Melengkung (Roller Coaster / Ramp 2D)** — Konversi energi bolak-balik antara bukit dan lembah.
    - **Model 2: Gerak Jatuh Bebas & Pantulan (GLBB 1D)** — Implementasi langsung materi Modul 4.3 dengan tumbukan lenting dan konservasi ketinggian.
    - **Model 3: Ayunan Bandul Sederhana (Pendulum)** — Osilasi harmonik non-linier antara energi kinetik di titik terendah dan energi potensial di titik simpangan maksimum.
-2. **Dasbor Analisis Energi Real-Time**:
-   - **Diagram Batang (Energy Bar Chart)**: Nilai $E_p$, $E_k$, $E_{disip}$, dan $E_m$ dalam Joule secara langsung.
-   - **Grafik Energi vs Waktu ($E$ vs $t$)**: Saat redaman $\mu = 0$, garis $E_m$ membuktikan hukum kekekalan dengan membentuk garis lurus horizontal sempurna!
-3. **Interaktivitas Mouse (Drag & Drop)**:
-   - Tarik bola langsung dengan kursor mouse untuk mengatur ketinggian awal / posisi awal peluncuran.
-4. **Pintasan Keyboard**:
-   - `[Spasi]` : Mulai / Jeda simulasi
-   - `[R]` : Reset simulasi ke posisi awal
-   - `[S]` : Simpan tangkapan layar ke gambar PNG (`saveCanvas`)
+2. **Dasbor energi real-time**:
+   - **Diagram batang** $E_p$, $E_k$, $Q$ (kalor/disipasi), dan $E_m$ dalam joule, dengan garis acuan $E_0$ (energi awal).
+   - **Grafik $E$ terhadap $t$**: saat $\mu = 0$, garis $E_m$ tetap datar.
+   - **Pembacaan $\Delta E_m = E_m - E_0$**: menunjukkan besar galat numerik Euler-Cromer (saat $\mu = 0$) atau persentase energi yang menjadi kalor (saat $\mu > 0$).
+   - Warna konsisten: biru = $E_p$ dan garis ketinggian $h$, oranye = $E_k$ dan vektor kecepatan $v$, merah = $Q$, hitam = $E_m$.
+3. **Kontrol**: slider massa, gravitasi (dengan preset Bulan/Bumi/Jupiter), redaman, dan posisi awal; slider posisi awal menyesuaikan model (posisi pada lintasan, ketinggian, atau sudut simpangan).
+4. **Seret bola** (mouse atau sentuh) untuk mengatur posisi awal. Slider dan tombol Reset ikut memakai posisi tersebut.
+5. **Pintasan keyboard**:
+   - `[Spasi]` : jalankan / jeda
+   - `[R]` : kembali ke posisi awal
+   - `[S]` : simpan kanvas sebagai PNG (`saveCanvas`)
 
 ---
 
 ## 🚀 Cara Menjalankan Simulasi
 
 ### Cara A: Menjalankan di Komputer Lokal (Offline)
-1. Buka folder `/Users/users/Documents/Project/p5js.energi`.
+1. Buka folder proyek ini.
 2. Klik dua kali file `index.html` untuk langsung membukanya di browser (Google Chrome, Firefox, Safari, atau Edge).
 3. Atau jalankan server lokal ringan via terminal:
    ```bash
-   cd /Users/users/Documents/Project/p5js.energi
+   cd mekanik
    python3 -m http.server 8000
    ```
    Lalu buka tautan `http://localhost:8000` di browser.
