@@ -188,6 +188,39 @@ function rc_x(u) {
   return RC_X_START + u * (RC_X_END - RC_X_START);
 }
 
+// Gerak di lintasan diintegrasikan dalam koordinat panjang busur s (meter):
+//   dv/dt = -g sin(theta) - redaman * v,   ds/dt = v
+// Dengan begitu Euler-Cromer tetap simplektik dan energi tidak menumpuk.
+// Tabel s(u) dipakai untuk mengubah s kembali ke parameter u.
+const RC_N = 2000;
+let rc_tabelS = null;
+
+function rc_bangunTabel() {
+  let W = (RC_X_END - RC_X_START) / skalaMeter;
+  rc_tabelS = new Float64Array(RC_N + 1);
+  for (let i = 1; i <= RC_N; i++) {
+    let u = i / RC_N;
+    rc_tabelS[i] = rc_tabelS[i - 1] + Math.hypot(W / RC_N, rc_getHeight(u) - rc_getHeight(u - 1 / RC_N));
+  }
+}
+
+function rc_sDariU(u) {
+  if (!rc_tabelS) rc_bangunTabel();
+  let k = Math.min(RC_N - 1, Math.floor(u * RC_N));
+  let t = u * RC_N - k;
+  return rc_tabelS[k] + t * (rc_tabelS[k + 1] - rc_tabelS[k]);
+}
+
+function rc_uDariS(s) {
+  if (!rc_tabelS) rc_bangunTabel();
+  let lo = 0, hi = RC_N;
+  while (hi - lo > 1) {
+    let mid = (lo + hi) >> 1;
+    if (rc_tabelS[mid] <= s) lo = mid; else hi = mid;
+  }
+  return (lo + (s - rc_tabelS[lo]) / (rc_tabelS[lo + 1] - rc_tabelS[lo])) / RC_N;
+}
+
 function updateFisikaRollerCoaster(deltaT) {
   let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
   let theta = Math.atan(rc_getSlope(rc_u) / trackWidthM);
@@ -195,18 +228,20 @@ function updateFisikaRollerCoaster(deltaT) {
   // a_t = -g sin(theta) - redaman * v
   let aTangensial = -g * Math.sin(theta) - (muGesek * 2.5) * rc_v;
 
+  // Euler-Cromer: v dulu, lalu s dengan v baru
   rc_v += aTangensial * deltaT;
-  let ds = rc_v * deltaT;
-  rc_u += (ds * Math.cos(theta)) / trackWidthM;
+  let s = rc_sDariU(rc_u) + rc_v * deltaT;
 
   // pantulan di ujung lintasan
-  if (rc_u < 0.03) {
-    rc_u = 0.03;
+  let sMin = rc_sDariU(0.03), sMaks = rc_sDariU(0.97);
+  if (s < sMin) {
+    s = sMin;
     rc_v = -rc_v * (1.0 - muGesek);
-  } else if (rc_u > 0.97) {
-    rc_u = 0.97;
+  } else if (s > sMaks) {
+    s = sMaks;
     rc_v = -rc_v * (1.0 - muGesek);
   }
+  rc_u = rc_uDariS(s);
 
   let h = rc_getHeight(rc_u);
   Ep = massa * g * h;
@@ -224,10 +259,16 @@ function updateFisikaJatuhBebas(deltaT) {
   jb_h += jb_v * deltaT;
 
   if (jb_h <= 0.0) {
-    jb_h = 0.0;
+    // Bola sempat menembus lantai sejauh |h| dalam satu langkah. Posisi ikut
+    // dicerminkan (bukan dipaksa h = 0) agar jarak tembus itu tidak membuang
+    // atau menambah energi secara acak.
     let koefRestitusi = Math.max(0.0, 1.0 - muGesek * 1.8); // e = 1 jika mu = 0
+    jb_h = -jb_h * koefRestitusi;
     jb_v = -jb_v * koefRestitusi;
-    if (Math.abs(jb_v) < 0.25) jb_v = 0.0;
+    if (Math.abs(jb_v) < 0.25) {
+      jb_v = 0.0;
+      jb_h = 0.0;
+    }
   }
 
   Ep = Math.max(0, massa * g * jb_h);
