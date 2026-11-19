@@ -432,14 +432,13 @@ function renderRollerCoaster() {
   endShape();
 
   let r = radiusBola();
+
+  // Syarat batas: dinding di kedua ujung (u = 0,03 dan 0,97, lihat updateFisikaRollerCoaster)
+  renderDindingLintasan(0.03, -1, r);
+  renderDindingLintasan(0.97, 1, r);
+
+  let { kx, ky, bx, by, theta } = rc_posisiBola(rc_u, r);
   let h = rc_getHeight(rc_u);
-  let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
-  let theta = Math.atan(rc_getSlope(rc_u) / trackWidthM);
-  // Titik kontak di rel; bola digeser sepanjang normal agar duduk di atas rel
-  let kx = rc_x(rc_u);
-  let ky = yTanah - h * skalaMeter;
-  let bx = kx - Math.sin(theta) * (r + 1.5);
-  let by = ky - Math.cos(theta) * (r + 1.5);
 
   renderUkuranH(kx, ky, yTanah, h, r + 18);
   renderBola(bx, by, r);
@@ -447,6 +446,45 @@ function renderRollerCoaster() {
   if (checkboxVektor.checked()) {
     renderPanahVektor(bx, by, rc_v * Math.cos(theta), -rc_v * Math.sin(theta), Math.abs(rc_v), r);
   }
+}
+
+// Titik kontak di rel dan pusat bola (digeser sepanjang normal agar duduk di atas rel)
+function rc_posisiBola(u, r) {
+  let trackWidthM = (RC_X_END - RC_X_START) / skalaMeter;
+  let theta = Math.atan(rc_getSlope(u) / trackWidthM);
+  let kx = rc_x(u);
+  let ky = yTanah - rc_getHeight(u) * skalaMeter;
+  return {
+    kx, ky, theta,
+    bx: kx - Math.sin(theta) * (r + 1.5),
+    by: ky - Math.cos(theta) * (r + 1.5)
+  };
+}
+
+// Dinding pemantul di ujung lintasan. sisi = -1 untuk ujung kiri, +1 untuk ujung kanan.
+// Dinding diletakkan tepat di tepi bola saat bola berada di batas pantul,
+// jadi pantulan terlihat terjadi saat bola menyentuh dinding.
+function renderDindingLintasan(uBatas, sisi, r) {
+  let { bx, by } = rc_posisiBola(uBatas, r);
+  let xw = bx + sisi * r;
+  let uw = (xw - RC_X_START) / (RC_X_END - RC_X_START);
+  let yRel = yTanah - rc_getHeight(constrain(uw, 0, 1)) * skalaMeter;
+  let yAtas = by - r - 16;
+
+  // Arsiran di sisi luar dinding, seperti arsiran tanah
+  stroke(C.ink3);
+  strokeWeight(1);
+  for (let y = yAtas + 4; y <= yRel; y += 6) {
+    line(xw, y, xw + sisi * 7, y - 6);
+  }
+
+  stroke(C.ink2);
+  strokeWeight(4);
+  strokeCap(SQUARE);
+  line(xw, yAtas, xw, yRel + 2);
+  strokeCap(ROUND);
+
+  teks('dinding', xw, yAtas - 6, { ukuran: 10, warna: C.ink3, rata: CENTER });
 }
 
 function renderJatuhBebas() {
