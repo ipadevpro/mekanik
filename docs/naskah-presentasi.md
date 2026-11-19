@@ -199,15 +199,15 @@ Terima kasih, Devi. Pertanyaan ketiga adalah bagaimana flowchart programnya. Kam
 
 **Pembicara: Ayutyastuti · ±1,5 menit**
 
-Mari kita ikuti alurnya dari kiri atas.
+Mari kita ikuti alurnya dari kiri atas. Sebelumnya, perhatikan bentuk kotaknya, Bapak Ibu, karena setiap bentuk punya arti. Oval untuk mulai, persegi panjang untuk proses, belah ketupat untuk keputusan, dan jajaran genjang untuk masukan dan keluaran.
 
-Program dimulai, lalu menyiapkan kanvas dan semua tombol serta slider. Setelah itu program menerapkan syarat awal dan menghitung E₀. Kotak ini berwarna oranye karena berhubungan dengan pertanyaan kedua, syarat awal.
+Program dimulai, lalu menyiapkan kanvas dan semua tombol serta slider. Berikutnya jajaran genjang pertama: program membaca masukan dari pengguna, yaitu massa, gravitasi, redaman, dan posisi awal. Setelah itu program menerapkan syarat awal dan menghitung E₀. Kotak ini berwarna oranye karena berhubungan dengan pertanyaan kedua, syarat awal.
 
 Kemudian program masuk ke perulangan yang berjalan sekitar 60 kali per detik. Ibarat film animasi, setiap putaran menghasilkan satu gambar.
 
 Pada setiap putaran ada pertanyaan: apakah simulasi sedang berjalan? Jika ya, program menghitung satu langkah fisika, kotak biru yang akan kita bahas di slide berikutnya. Jika tidak, misalnya saat bola sedang diseret, program cukup menghitung energi dari posisi saat itu.
 
-Setelah itu program menggambar area eksperimen dan dasbor energi, lalu kembali ke awal perulangan untuk frame berikutnya.
+Hasilnya masuk ke jajaran genjang kedua, yaitu keluaran: bola dan dasbor energi ditampilkan ke layar. Setelah itu program kembali ke awal perulangan untuk frame berikutnya.
 
 ## Slide 17 · Satu Langkah Fisika
 
@@ -227,7 +227,9 @@ Ketiga cabang kemudian bertemu di satu kotak yang sama, yaitu perhitungan energi
 
 Diagram terakhir menunjukkan apa yang terjadi ketika pengguna berinteraksi dengan simulasi. Masukan ini bisa terjadi kapan saja, dan hasilnya langsung tampil pada frame berikutnya.
 
-Ada tujuh jenis masukan di baris atas, dan akibatnya di baris bawah. Kotak oranye adalah masukan yang mengubah syarat awal, misalnya tombol Reset, menyeret bola, dan mengganti sistem. Setiap kali itu terjadi, E₀ dihitung ulang, sehingga grafik energi tetap adil untuk dibandingkan.
+Ada tujuh jenis masukan di baris atas. Semuanya digambar sebagai jajaran genjang, karena dalam kaidah flowchart, jajaran genjang adalah simbol untuk masukan dan keluaran. Akibat dari setiap masukan ada di baris bawah.
+
+Kotak oranye adalah masukan yang mengubah syarat awal, misalnya tombol Reset, menyeret bola, dan mengganti sistem. Setiap kali itu terjadi, E₀ dihitung ulang, sehingga grafik energi tetap adil untuk dibandingkan.
 
 Kotak biru adalah slider μ, karena ia mengubah koefisien redaman b di dalam persamaan diferensial. Begitu μ lebih dari nol, kalor Q mulai tercatat.
 
