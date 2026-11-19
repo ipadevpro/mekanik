@@ -2,7 +2,7 @@
 
 Sains Komputasi RPL 2026 · Dosen: Prof. Dr. rer. nat. Yudi Rosandi dan Dr. Budi Adiperdana
 
-Naskah ini pendamping 19 slide presentasi. Isi yang sama juga ada di catatan pembicara setiap slide, jadi muncul di layar presenter saat mode Present.
+Naskah ini pendamping 20 slide presentasi. Isi yang sama juga ada di catatan pembicara setiap slide, jadi muncul di layar presenter saat mode Present.
 
 ## Pembagian pembicara
 
@@ -10,9 +10,9 @@ Naskah ini pendamping 19 slide presentasi. Isi yang sama juga ada di catatan pem
 |---|---|---|---|
 | Faizah Hayati | 1–8 | Pembuka, tampilan simulasi, pertanyaan 1: persamaan diferensial | ±7 menit |
 | Devi Saidulloh | 9–14 | Euler-Cromer, kekekalan energi, pertanyaan 2: syarat awal dan syarat batas | ±6 menit |
-| Ayutyastuti | 15–19 | Pertanyaan 3: flowchart, ringkasan, demo langsung | ±5 menit + demo 3 menit |
+| Ayutyastuti | 15–20 | Pertanyaan 3: flowchart per simulasi, ringkasan, demo langsung | ±7 menit + demo 3 menit |
 
-Total sekitar 18 menit ditambah demo. Pembagian ini usulan dan bisa ditukar sesuai kesepakatan kelompok.
+Total sekitar 20 menit ditambah demo. Pembagian ini usulan dan bisa ditukar sesuai kesepakatan kelompok.
 
 ## Tips membawakan
 
@@ -193,35 +193,53 @@ Selanjutnya saya serahkan kepada rekan kami, Ayutyastuti.
 
 **Pembicara: Ayutyastuti · ±15 detik**
 
-Terima kasih, Devi. Pertanyaan ketiga adalah bagaimana flowchart programnya. Kami menyiapkan tiga diagram: alur program secara keseluruhan, isi satu langkah fisika, dan apa yang terjadi ketika pengguna mengubah sesuatu.
+Terima kasih, Devi. Pertanyaan ketiga adalah bagaimana flowchart programnya. Kami menyiapkan satu flowchart untuk setiap simulasi. Ketiganya punya alur yang sama: mulai, inisialisasi, input, syarat awal, lalu perulangan perhitungan dan output. Yang berbeda adalah isi kotak persamaan dan syarat batasnya. Terakhir ada satu diagram tentang apa yang terjadi ketika pengguna mengubah sesuatu.
 
-## Slide 16 · Alur Program
-
-**Pembicara: Ayutyastuti · ±1,5 menit**
-
-Mari kita ikuti alurnya dari kiri atas. Sebelumnya, perhatikan bentuk kotaknya, Bapak Ibu, karena setiap bentuk punya arti. Oval untuk mulai, persegi panjang untuk proses, belah ketupat untuk keputusan, dan jajaran genjang untuk masukan dan keluaran.
-
-Program dimulai, lalu menyiapkan kanvas dan semua tombol serta slider. Berikutnya jajaran genjang pertama: program membaca masukan dari pengguna, yaitu massa, gravitasi, redaman, dan posisi awal. Setelah itu program menerapkan syarat awal dan menghitung E₀. Kotak ini berwarna oranye karena berhubungan dengan pertanyaan kedua, syarat awal.
-
-Kemudian program masuk ke perulangan yang berjalan sekitar 60 kali per detik. Ibarat film animasi, setiap putaran menghasilkan satu gambar.
-
-Pada setiap putaran ada pertanyaan: apakah simulasi sedang berjalan? Jika ya, program menghitung satu langkah fisika, kotak biru yang akan kita bahas di slide berikutnya. Jika tidak, misalnya saat bola sedang diseret, program cukup menghitung energi dari posisi saat itu.
-
-Hasilnya masuk ke jajaran genjang kedua, yaitu keluaran: bola dan dasbor energi ditampilkan ke layar. Setelah itu program kembali ke awal perulangan untuk frame berikutnya.
-
-## Slide 17 · Satu Langkah Fisika
+## Slide 16 · Flowchart Jatuh Bebas
 
 **Pembicara: Ayutyastuti · ±1,5 menit**
 
-Inilah isi kotak biru tadi, dan sebenarnya slide ini merangkum jawaban dua pertanyaan sebelumnya.
+Kita mulai dari flowchart jatuh bebas. Sebelumnya, perhatikan bentuk kotaknya, Bapak Ibu. Oval untuk mulai dan selesai, persegi panjang untuk proses, belah ketupat untuk keputusan, dan jajaran genjang untuk input dan output.
 
-Setiap langkah dimulai dengan menambah waktu sebesar Δt. Lalu program bercabang sesuai sistem yang dipilih, satu baris untuk lintasan, jatuh bebas, dan bandul.
+Program dimulai, lalu mengisi konstanta: gravitasi 9,8 m/s² dan langkah waktu 0,02 detik. Berikutnya input dari pengguna: massa, ketinggian awal, dan redaman. Lalu syarat awal: bola di ketinggian h₀ dan diam, sehingga energi awalnya E₀ = m·g·h₀. Kotak ini oranye karena merupakan syarat awal.
 
-Perhatikan warnanya, Bapak Ibu. Kotak biru adalah persamaan diferensial yang sudah didiskretisasi: hitung percepatan, lalu perbarui kecepatan dan posisi. Itu jawaban pertanyaan pertama. Kotak oranye adalah syarat batas: lewat ujung lintasan, menyentuh lantai, dan tali bandul yang tetap. Itu jawaban pertanyaan kedua.
+Kotak biru adalah inti perhitungannya, persamaan diferensial yang didiskretisasi: hitung percepatan, perbarui kecepatan, lalu perbarui ketinggian.
 
-Ketiga cabang kemudian bertemu di satu kotak yang sama, yaitu perhitungan energi: Ep = mgh, Ek = ½mv², Em = Ep + Ek, dan Q = E₀ − Em. Setelah itu program kembali menggambar.
+Kemudian ada pertanyaan: apakah h ≤ 0, artinya bola sudah menyentuh lantai? Jika ya, bola dipantulkan. Inilah syarat batas lantai. Jika tidak, langsung lanjut.
 
-## Slide 18 · Masukan Pengguna
+Setelah itu program menghitung energi: Ep, Ek dari kecepatan, Em, dan kalor Q. Hasilnya ditampilkan ke layar sebagai output. Jika simulasi tidak dijeda, program kembali ke kotak biru untuk frame berikutnya. Jika dijeda, perhitungan berhenti.
+
+## Slide 17 · Flowchart Lintasan Melengkung
+
+**Pembicara: Ayutyastuti · ±1,5 menit**
+
+Flowchart kedua untuk lintasan melengkung. Alurnya sama dengan jatuh bebas, hanya isi kotaknya yang berbeda.
+
+Saat inisialisasi, selain gravitasi dan langkah waktu, program juga menyiapkan bentuk lintasan h(x) dan tabel jarak tempuh s(x) dari 2.000 potongan lintasan. Inputnya massa, posisi awal bola, dan redaman. Syarat awalnya bola diam di posisi awal, dan energi awalnya E₀ = m·g·h₀.
+
+Kotak biru menghitung gerak sepanjang lintasan: percepatannya adalah komponen gravitasi searah lintasan, g sin θ, dikurangi redaman. Lalu kecepatan dan jarak tempuh diperbarui.
+
+Keputusan berikutnya: apakah bola sudah melewati ujung lintasan? Jika ya, bola memantul di dinding dan arah kecepatannya dibalik. Itulah syarat batas lintasan.
+
+Perlu kami sampaikan, bola berbalik arah saat menanjak terjadi dengan sendirinya karena gravitasi, tanpa perlu keputusan khusus di program. Program cukup menghitung gaya, dan geraknya mengikuti.
+
+Setelah itu program mencari ketinggian dari tabel, menghitung energi, menampilkan hasilnya, lalu kembali ke kotak biru untuk frame berikutnya selama simulasi tidak dijeda.
+
+## Slide 18 · Flowchart Bandul Sederhana
+
+**Pembicara: Ayutyastuti · ±1,5 menit**
+
+Flowchart ketiga untuk bandul sederhana. Alurnya kembali sama, hanya variabelnya sudut, bukan ketinggian.
+
+Inisialisasinya gravitasi, panjang tali 6 meter, dan langkah waktu. Inputnya massa, sudut awal, dan redaman. Syarat awalnya bandul diam di sudut θ₀, sehingga energi awalnya E₀ = m·g·L(1 − cos θ₀).
+
+Kotak biru menghitung percepatan sudut dari persamaan bandul, lalu memperbarui kecepatan sudut dan sudutnya.
+
+Berbeda dengan dua simulasi lain, bandul tidak punya keputusan belah ketupat untuk dinding, karena memang tidak ada dinding. Syarat batasnya adalah tali yang panjangnya tetap. Karena gerak ditulis dalam sudut, posisi bandul selalu berjarak L dari titik gantung, sehingga syarat ini terpenuhi dengan sendirinya. Dari sudut itu program menghitung ketinggian dan kelajuan.
+
+Setelah itu energi dihitung, hasilnya ditampilkan, dan program kembali ke kotak biru untuk frame berikutnya selama simulasi tidak dijeda.
+
+## Slide 19 · Masukan Pengguna
 
 **Pembicara: Ayutyastuti · ±1 menit**
 
@@ -233,7 +251,7 @@ Kotak oranye adalah masukan yang mengubah syarat awal, misalnya tombol Reset, me
 
 Kotak biru adalah slider μ, karena ia mengubah koefisien redaman b di dalam persamaan diferensial. Begitu μ lebih dari nol, kalor Q mulai tercatat.
 
-## Slide 19 · Ringkasan Jawaban
+## Slide 20 · Ringkasan Jawaban
 
 **Pembicara: Ayutyastuti · ±1 menit, lalu demo ±3 menit**
 
