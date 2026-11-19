@@ -117,7 +117,7 @@ let posisiAwal = {
 // Komponen UI DOM
 let selectModel, tombolMulai, tombolReset, tombolSlow, tombolSimpan;
 let sliderMassa, sliderGravitasi, sliderGesekan, sliderKetinggian;
-let checkboxVektor, checkboxJejak, checkboxGrid;
+let checkboxVektor, checkboxJejak, checkboxGrid, checkboxSuara;
 let outMassa, outGravitasi, outGesekan, outPosisi, labelPosisi;
 let tombolPresetG = [];
 
@@ -141,6 +141,7 @@ function draw() {
   } else {
     hitungEnergiStatis();
   }
+  perbaruiSuaraGerak();
 
   background(C.surface);
   renderLingkunganSimulasi();
@@ -236,9 +237,11 @@ function updateFisikaRollerCoaster(deltaT) {
   let sMin = rc_sDariU(0.03), sMaks = rc_sDariU(0.97);
   if (s < sMin) {
     s = sMin;
+    bunyiTumbukan(Math.abs(rc_v), 'dinding');
     rc_v = -rc_v * (1.0 - muGesek);
   } else if (s > sMaks) {
     s = sMaks;
+    bunyiTumbukan(Math.abs(rc_v), 'dinding');
     rc_v = -rc_v * (1.0 - muGesek);
   }
   rc_u = rc_uDariS(s);
@@ -263,6 +266,8 @@ function updateFisikaJatuhBebas(deltaT) {
     // dicerminkan (bukan dipaksa h = 0) agar jarak tembus itu tidak membuang
     // atau menambah energi secara acak.
     let koefRestitusi = Math.max(0.0, 1.0 - muGesek * 1.8); // e = 1 jika mu = 0
+    // Bunyi hanya untuk pantulan sungguhan, bukan saat bola sudah diam di lantai
+    if (Math.abs(jb_v) > 0.6) bunyiTumbukan(Math.abs(jb_v), 'lantai');
     jb_h = -jb_h * koefRestitusi;
     jb_v = -jb_v * koefRestitusi;
     if (Math.abs(jb_v) < 0.25) {
@@ -308,6 +313,102 @@ function kelajuanSaatIni() {
   if (modelAktif === 'roller_coaster') return Math.abs(rc_v);
   if (modelAktif === 'jatuh_bebas') return Math.abs(jb_v);
   return Math.abs(bd_L * bd_omega);
+}
+
+// ============================================================================
+// SUARA (Web Audio API, dibangkitkan langsung tanpa berkas audio)
+//   - Tumbukan: lantai (jatuh bebas) dan dinding (lintasan). Kerasnya sebanding
+//     dengan kelajuan saat menumbuk.
+//   - Gerak terus-menerus: gelinding (lintasan), desir angin (bandul, jatuh
+//     bebas). Kerasnya mengikuti kelajuan, jadi telinga ikut "mendengar" Ek.
+// Browser hanya mengizinkan suara setelah pengguna berinteraksi, jadi audio
+// baru dinyalakan saat tombol, tombol keyboard, atau kanvas pertama kali dipakai.
+// ============================================================================
+let audio = null;
+
+function siapkanAudio() {
+  if (audio) {
+    if (audio.ctx.state === 'suspended') audio.ctx.resume();
+    return;
+  }
+  let AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  let ctx = new AC();
+  let master = ctx.createGain();
+  master.gain.value = 0.8;
+  master.connect(ctx.destination);
+
+  // Derau putih 2 detik yang diulang: bahan suara gelinding dan angin
+  let buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  let data = buf.getChannelData(0);
+  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  let derau = ctx.createBufferSource();
+  derau.buffer = buf;
+  derau.loop = true;
+
+  let filterGerak = ctx.createBiquadFilter();
+  filterGerak.type = 'bandpass';
+  filterGerak.Q.value = 0.8;
+  let gainGerak = ctx.createGain();
+  gainGerak.gain.value = 0;
+  derau.connect(filterGerak);
+  filterGerak.connect(gainGerak);
+  gainGerak.connect(master);
+  derau.start();
+
+  audio = { ctx, master, filterGerak, gainGerak };
+}
+
+function suaraAktif() {
+  return audio && checkboxSuara && checkboxSuara.checked() && audio.ctx.state === 'running';
+}
+
+// jenis: 'lantai' (bunyi "duk" rendah) atau 'dinding' (bunyi "tok" kayu)
+function bunyiTumbukan(kecepatan, jenis) {
+  if (!suaraAktif()) return;
+  let kuat = constrain(kecepatan / 12, 0, 1);
+  if (kuat < 0.04) return;
+
+  let ctx = audio.ctx;
+  let t = ctx.currentTime;
+  let lantai = jenis === 'lantai';
+  let lama = lantai ? 0.25 : 0.12;
+
+  let osc = ctx.createOscillator();
+  let g = ctx.createGain();
+  osc.type = lantai ? 'sine' : 'triangle';
+  osc.frequency.setValueAtTime(lantai ? 180 : 520, t);
+  osc.frequency.exponentialRampToValueAtTime(lantai ? 55 : 240, t + lama * 0.7);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05 + 0.6 * kuat, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + lama);
+  osc.connect(g);
+  g.connect(audio.master);
+  osc.start(t);
+  osc.stop(t + lama + 0.05);
+}
+
+// Dipanggil tiap frame: atur kerasnya suara gerak dari kelajuan saat ini
+function perbaruiSuaraGerak() {
+  if (!audio) return;
+  let target = 0;
+  let frek = 400;
+  if (suaraAktif() && statusJalan && !isDragging) {
+    let v = kelajuanSaatIni();
+    if (modelAktif === 'roller_coaster') {
+      target = 0.22 * constrain(v / 11, 0, 1);      // gelinding di rel
+      frek = 220 + 35 * v;
+    } else if (modelAktif === 'bandul') {
+      target = 0.3 * Math.pow(constrain(v / 7, 0, 1), 1.5); // "wus" di titik terendah
+      frek = 500 + 120 * v;
+    } else {
+      target = 0.08 * constrain(v / 12, 0, 1);      // desir angin saat jatuh
+      frek = 900 + 60 * v;
+    }
+  }
+  let t = audio.ctx.currentTime;
+  audio.gainGerak.gain.setTargetAtTime(target, t, 0.05);
+  audio.filterGerak.frequency.setTargetAtTime(frek, t, 0.05);
 }
 
 function hitungEnergiStatis() {
@@ -874,6 +975,8 @@ function inisialisasiUI() {
   checkboxVektor = createCheckbox('Vektor v', true).parent(opsi);
   checkboxJejak = createCheckbox('Jejak', true).parent(opsi);
   checkboxGrid = createCheckbox('Grid', true).parent(opsi);
+  checkboxSuara = createCheckbox('Suara', true).parent(opsi);
+  checkboxSuara.changed(siapkanAudio);
 
   aturSliderPosisi();
   updateTeksUI();
@@ -957,6 +1060,7 @@ function updateTombolMulai() {
 }
 
 function toggleSimulasi() {
+  siapkanAudio();
   statusJalan = !statusJalan;
   updateTombolMulai();
 }
@@ -989,6 +1093,7 @@ function simpanGambar() {
 // 8. INTERAKSI MOUSE / SENTUH (seret bola untuk mengatur posisi awal)
 // ============================================================================
 function mousePressed() {
+  siapkanAudio();
   if (mouseX < 0 || mouseX > LEBAR_SIM || mouseY < 0 || mouseY > height) return;
 
   let b = posisiBola();
@@ -1032,6 +1137,7 @@ function mouseReleased() {
 // 9. PINTASAN KEYBOARD
 // ============================================================================
 function keyPressed() {
+  siapkanAudio();
   let el = document.activeElement;
   let tag = el ? el.tagName : '';
   if (tag === 'SELECT' || tag === 'TEXTAREA') return;
